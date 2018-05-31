@@ -1,9 +1,9 @@
 #include <Arduino.h>
-// #include <avr/io.h>
-// #include <util/twi.h>
-// #include <avr/interrupt.h>
+#include <avr/io.h>
+#include <util/twi.h>
+#include <avr/interrupt.h>
 // #include <EEPROM.h>
-// #include "encodedMotor.h"
+#include "encodedMotor.h"
 
 //Print message priority
 //#define DEBUG_INFO_ERROR
@@ -177,7 +177,7 @@ void ParseI2cCmd(char *c)
   {
   // move state and function
   case CMD_RESET:
-    resetMotor();
+    // resetMotor();
     break;
   case CMD_MOVE_TO:
 #ifdef DEBUG_INFO
@@ -1108,87 +1108,87 @@ void ParseI2cCmd(char *c)
 void setup()
 {
   delay(10);
-  Serial.begin(115200);
-  pwm_frequency_init();
-  pinMode(INT_1_PIN, INPUT_PULLUP);
-  pinMode(DIR_1_PIN, INPUT_PULLUP);
-  pinMode(INT_2_PIN, INPUT_PULLUP);
-  pinMode(DIR_2_PIN, INPUT_PULLUP);
-  pinMode(MOTOR_1_H1, OUTPUT);
-  pinMode(MOTOR_2_H1, OUTPUT);
+  // Serial.begin(115200);
+  // pwm_frequency_init();
+  // pinMode(INT_1_PIN, INPUT_PULLUP);
+  // pinMode(DIR_1_PIN, INPUT_PULLUP);
+  // pinMode(INT_2_PIN, INPUT_PULLUP);
+  // pinMode(DIR_2_PIN, INPUT_PULLUP);
+  // pinMode(MOTOR_1_H1, OUTPUT);
+  // pinMode(MOTOR_2_H1, OUTPUT);
 
   EICRA = (1 << ISC11) | (1 << ISC01);
   EIMSK = (1 << INT0) | (1 << INT1);
 
   delay(10);
-  readEEPROM();
-  delay(10);
-  initMotor();
+  // readEEPROM();
+  // delay(10);
+  // initMotor();
   I2C_init((dev_id) << 1);
 }
 
-char Uart_Buf[64];
-char bufindex;
+// char Uart_Buf[64];
+// char bufindex;
 void loop()
 {
-  double pwm1_read_temp = 0;
-  double pwm2_read_temp = 0;
-  //G code processing
-  while (Serial.available() > 0)
-  {
-    char c = Serial.read();
-    Serial.write(c);
-    Uart_Buf[bufindex++] = c;
-    if ((c == '\n') || (c == '#'))
-    {
-      ParseSerialCmd(Uart_Buf);
-      memset(Uart_Buf, 0, 64);
-      bufindex = 0;
-    }
-  }
-  updateCurPos();
-  updateSpeed();
+  // double pwm1_read_temp = 0;
+  // double pwm2_read_temp = 0;
+  // //G code processing
+  // while (Serial.available() > 0)
+  // {
+  //   char c = Serial.read();
+  //   Serial.write(c);
+  //   Uart_Buf[bufindex++] = c;
+  //   if ((c == '\n') || (c == '#'))
+  //   {
+  //     ParseSerialCmd(Uart_Buf);
+  //     memset(Uart_Buf, 0, 64);
+  //     bufindex = 0;
+  //   }
+  // }
+  // updateCurPos();
+  // updateSpeed();
 
-  if (encoder_data[MOTOR_0].mode == PWM_MODE)
-  {
-    for (int i = 0; i < 20; i++)
-    {
-      pwm1_read_temp = pwm1_read_temp + analogRead(A1); //Read PWM values
-    }
-    encoder_data[MOTOR_0].tar_pwm = (pwm1_read_temp / 20 - 512) * 255 / 512;
-  }
+  // if (encoder_data[MOTOR_0].mode == PWM_MODE)
+  // {
+  //   for (int i = 0; i < 20; i++)
+  //   {
+  //     pwm1_read_temp = pwm1_read_temp + analogRead(A1); //Read PWM values
+  //   }
+  //   encoder_data[MOTOR_0].tar_pwm = (pwm1_read_temp / 20 - 512) * 255 / 512;
+  // }
 
-  if (encoder_data[MOTOR_1].mode == PWM_MODE)
-  {
-    for (int i = 0; i < 20; i++)
-    {
-      pwm2_read_temp = pwm2_read_temp + analogRead(A0); //Read PWM values
-    }
-    encoder_data[MOTOR_1].tar_pwm = (pwm2_read_temp / 20 - 512) * 255 / 512;
-  }
+  // if (encoder_data[MOTOR_1].mode == PWM_MODE)
+  // {
+  //   for (int i = 0; i < 20; i++)
+  //   {
+  //     pwm2_read_temp = pwm2_read_temp + analogRead(A0); //Read PWM values
+  //   }
+  //   encoder_data[MOTOR_1].tar_pwm = (pwm2_read_temp / 20 - 512) * 255 / 512;
+  // }
 
-  //encoder move
-  if (encoder_data[MOTOR_0].mode == I2C_MODE)
-  {
-    encoder_move(MOTOR_0);
-    setMotorPwm(MOTOR_0, encoder_data[MOTOR_0].cur_pwm);
-  }
-  else
-  {
-    pwm_move(MOTOR_0);
-    setMotorPwm(MOTOR_0, encoder_data[MOTOR_0].cur_pwm);
-  }
+  // //encoder move
+  // if (encoder_data[MOTOR_0].mode == I2C_MODE)
+  // {
+  //   encoder_move(MOTOR_0);
+  //   setMotorPwm(MOTOR_0, encoder_data[MOTOR_0].cur_pwm);
+  // }
+  // else
+  // {
+  //   pwm_move(MOTOR_0);
+  //   setMotorPwm(MOTOR_0, encoder_data[MOTOR_0].cur_pwm);
+  // }
 
-  if (encoder_data[MOTOR_1].mode == I2C_MODE)
-  {
-    encoder_move(MOTOR_1);
-    setMotorPwm(MOTOR_1, encoder_data[MOTOR_1].cur_pwm);
-  }
-  else
-  {
-    pwm_move(MOTOR_1);
-    setMotorPwm(MOTOR_1, encoder_data[MOTOR_1].cur_pwm);
-  }
+  // if (encoder_data[MOTOR_1].mode == I2C_MODE)
+  // {
+  //   encoder_move(MOTOR_1);
+  //   setMotorPwm(MOTOR_1, encoder_data[MOTOR_1].cur_pwm);
+  // }
+  // else
+  // {
+  //   pwm_move(MOTOR_1);
+  //   setMotorPwm(MOTOR_1, encoder_data[MOTOR_1].cur_pwm);
+  // }
   //  Serial.print("cur0:");
   //  Serial.print(encoder_data[MOTOR_0].cur_pwm);
   //  Serial.print(" ,cur1:");
