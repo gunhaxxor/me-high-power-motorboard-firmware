@@ -4,29 +4,37 @@
 #include <avr/interrupt.h>
 // #include <EEPROM.h>
 #include "encodedMotor.h"
+#include <PID_v1.h>
+#include <Encoder.h>
 
 //Print message priority
 //#define DEBUG_INFO_ERROR
 //#define DEBUG_INFO_HIGH
 //#define DEBUG_INFO_MID
 //#define DEBUG_INFO_LOW
-//#define DEBUG_INFO
+#define DEBUG_INFO
 
 //Common parameter configuration
-// #define DEFALUT_I2C_ADDR 0x09
+#define DEFAULT_I2C_ADDR 0x0A
 // #define PULSE_PER_C 8
 // #define MOTOR_BOTH 2
 
 //GPIO configuration
-// #define INT_1_PIN 3
-// #define DIR_1_PIN A2
+#define INT_1_PIN 3
+#define DIR_1_PIN A2
 // #define MOTOR_1_PWM 6
 // #define MOTOR_1_H1 7
 
-// #define INT_2_PIN 2
-// #define DIR_2_PIN A3
+#define INT_2_PIN 2
+#define DIR_2_PIN A3
 // #define MOTOR_2_PWM 5
 // #define MOTOR_2_H1 8
+
+Encoder motorEncoder1(INT_1_PIN, DIR_1_PIN);
+Encoder motorEncoder2(INT_2_PIN, DIR_2_PIN);
+
+int motorEncoder1Pos = 0;
+int motorEncoder2Pos = 0;
 
 //Interrupt Configuration
 // #define MOTOR_1_IRQ INT1_vect
@@ -238,19 +246,19 @@ void ParseI2cCmd(char *c)
     // }
     break;
   case CMD_GET_POS_PID:
-    if (slot == MOTOR_1)
-      // {
-      //   memcpy(&bufI2C[0], &encoder_eeprom.pos1_p, 4);
-      //   memcpy(&bufI2C[4], &encoder_eeprom.pos1_i, 4);
-      //   memcpy(&bufI2C[8], &encoder_eeprom.pos1_d, 4);
-      // }
-      // else
-      // {
-      //   memcpy(&bufI2C[0], &encoder_eeprom.pos0_p, 4);
-      //   memcpy(&bufI2C[4], &encoder_eeprom.pos0_i, 4);
-      //   memcpy(&bufI2C[8], &encoder_eeprom.pos0_d, 4);
-      // }
-      break;
+    // if (slot == MOTOR_1)
+    // {
+    //   memcpy(&bufI2C[0], &encoder_eeprom.pos1_p, 4);
+    //   memcpy(&bufI2C[4], &encoder_eeprom.pos1_i, 4);
+    //   memcpy(&bufI2C[8], &encoder_eeprom.pos1_d, 4);
+    // }
+    // else
+    // {
+    //   memcpy(&bufI2C[0], &encoder_eeprom.pos0_p, 4);
+    //   memcpy(&bufI2C[4], &encoder_eeprom.pos0_i, 4);
+    //   memcpy(&bufI2C[8], &encoder_eeprom.pos0_d, 4);
+    // }
+    break;
   case CMD_GET_SPEED:
     // memcpy(&bufI2C[0], &encoder_data[slot].current_speed, 4);
     break;
@@ -449,7 +457,7 @@ void ParseI2cCmd(char *c)
 // void setDefaultvalue(void)
 // {
 //   encoder_eeprom.start_data = EEPROM_PID_START;
-//   encoder_eeprom.devid = DEFALUT_I2C_ADDR;
+//   encoder_eeprom.devid = DEFAULT_I2C_ADDR;
 
 //   encoder_eeprom.speed0_p = 0.18;
 //   encoder_eeprom.speed0_i = 0.64;
@@ -1108,7 +1116,7 @@ void ParseI2cCmd(char *c)
 void setup()
 {
   delay(10);
-  // Serial.begin(115200);
+  Serial.begin(115200);
   // pwm_frequency_init();
   // pinMode(INT_1_PIN, INPUT_PULLUP);
   // pinMode(DIR_1_PIN, INPUT_PULLUP);
@@ -1117,20 +1125,39 @@ void setup()
   // pinMode(MOTOR_1_H1, OUTPUT);
   // pinMode(MOTOR_2_H1, OUTPUT);
 
-  EICRA = (1 << ISC11) | (1 << ISC01);
-  EIMSK = (1 << INT0) | (1 << INT1);
+  // These lines enable interrupt on falling edge of INT0 (PD2)(arduino pin 2) and INT1 (PD3)(arduino pin 3)
+  // Commenting out in order to use the encoder library, which automatically will attach interrupts where applicable.
+  // EICRA = (1 << ISC11) | (1 << ISC01);
+  // EIMSK = (1 << INT0) | (1 << INT1);
 
   delay(10);
   // readEEPROM();
   // delay(10);
   // initMotor();
-  I2C_init((dev_id) << 1);
+
+  // I2C_init((dev_id) << 1);
+  I2C_init((DEFAULT_I2C_ADDR) << 1);
+  Serial.println("Driver board says heeellloooo!!!! Much power! Such high current! Wow!");
 }
 
 // char Uart_Buf[64];
 // char bufindex;
 void loop()
 {
+  long newValueEncoder1, newValueEncoder2;
+  newValueEncoder1 = motorEncoder1.read();
+  newValueEncoder2 = motorEncoder2.read();
+  if (newValueEncoder1 != motorEncoder1Pos || newValueEncoder2 != motorEncoder2Pos)
+  {
+    Serial.print("motorEncoder1 = ");
+    Serial.print(newValueEncoder1);
+    Serial.print(", motorEncoder2 = ");
+    Serial.print(newValueEncoder2);
+    Serial.println();
+    motorEncoder1Pos = newValueEncoder1;
+    motorEncoder2Pos = newValueEncoder2;
+  }
+
   // double pwm1_read_temp = 0;
   // double pwm2_read_temp = 0;
   // //G code processing
