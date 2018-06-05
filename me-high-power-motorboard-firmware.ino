@@ -12,7 +12,7 @@
 //#define DEBUG_INFO_HIGH
 //#define DEBUG_INFO_MID
 //#define DEBUG_INFO_LOW
-#define DEBUG_INFO
+// #define DEBUG_INFO
 
 //Common parameter configuration
 #define DEFAULT_I2C_ADDR 0x0A
@@ -22,19 +22,26 @@
 //GPIO configuration
 #define INT_1_PIN 3
 #define DIR_1_PIN A2
-// #define MOTOR_1_PWM 6
-// #define MOTOR_1_H1 7
+#define MOTOR_1_PWM 6
+#define MOTOR_1_H1 7
 
 #define INT_2_PIN 2
 #define DIR_2_PIN A3
-// #define MOTOR_2_PWM 5
-// #define MOTOR_2_H1 8
+#define MOTOR_2_PWM 5
+#define MOTOR_2_H1 8
 
 Encoder motorEncoder1(INT_1_PIN, DIR_1_PIN);
 Encoder motorEncoder2(INT_2_PIN, DIR_2_PIN);
 
-int motorEncoder1Pos = 0;
-int motorEncoder2Pos = 0;
+//PID config
+//Define Variables we'll be connecting to
+double motor1Setpoint, motor1Input, motor1Output;
+double motor2Setpoint, motor2Input, motor2Output;
+
+//Specify the links and initial tuning parameters
+double Kp = 40, Ki = 20, Kd = 20;
+PID motor1PID(&motor1Input, &motor1Output, &motor1Setpoint, Kp, Ki, Kd, DIRECT);
+PID motor2PID(&motor2Input, &motor2Output, &motor2Setpoint, Kp, Ki, Kd, DIRECT);
 
 //Interrupt Configuration
 // #define MOTOR_1_IRQ INT1_vect
@@ -639,35 +646,35 @@ void ParseI2cCmd(char *c)
 //   }
 // }
 
-// void setMotor1Pwm(int16_t pwm)
-// {
-//   pwm = constrain(pwm, -250, 250);
-//   if (pwm < 0)
-//   {
-//     digitalWrite(MOTOR_1_H1, HIGH);
-//     analogWrite(MOTOR_1_PWM, abs(pwm));
-//   }
-//   else
-//   {
-//     digitalWrite(MOTOR_1_H1, LOW);
-//     analogWrite(MOTOR_1_PWM, abs(pwm));
-//   }
-// }
+void setMotor1Pwm(int16_t pwm)
+{
+  pwm = constrain(pwm, -250, 250);
+  if (pwm < 0)
+  {
+    digitalWrite(MOTOR_1_H1, HIGH);
+    analogWrite(MOTOR_1_PWM, abs(pwm));
+  }
+  else
+  {
+    digitalWrite(MOTOR_1_H1, LOW);
+    analogWrite(MOTOR_1_PWM, abs(pwm));
+  }
+}
 
-// void setMotor2Pwm(int16_t pwm)
-// {
-//   pwm = constrain(pwm, -250, 250);
-//   if (pwm < 0)
-//   {
-//     digitalWrite(MOTOR_2_H1, HIGH);
-//     analogWrite(MOTOR_2_PWM, abs(pwm));
-//   }
-//   else
-//   {
-//     digitalWrite(MOTOR_2_H1, LOW);
-//     analogWrite(MOTOR_2_PWM, abs(pwm));
-//   }
-// }
+void setMotor2Pwm(int16_t pwm)
+{
+  pwm = constrain(pwm, -250, 250);
+  if (pwm < 0)
+  {
+    digitalWrite(MOTOR_2_H1, HIGH);
+    analogWrite(MOTOR_2_PWM, abs(pwm));
+  }
+  else
+  {
+    digitalWrite(MOTOR_2_H1, LOW);
+    analogWrite(MOTOR_2_PWM, abs(pwm));
+  }
+}
 
 /****************************************************************************************************
  * processing function
@@ -1102,14 +1109,14 @@ void ParseI2cCmd(char *c)
 //   encoder_data[slot].pulse = pos;
 // }
 
-// void pwm_frequency_init(void)
-// {
-//   TCCR1A = _BV(WGM10);
-//   TCCR1B = _BV(CS11) | _BV(CS10) | _BV(WGM12);
+void pwm_frequency_init(void)
+{
+  // TCCR1A = _BV(WGM10);
+  // TCCR1B = _BV(CS11) | _BV(CS10) | _BV(WGM12);
 
-//   TCCR2A = _BV(WGM21) | _BV(WGM20);
-//   TCCR2B = _BV(CS22);
-// }
+  // TCCR2A = _BV(WGM21) | _BV(WGM20);
+  // TCCR2B = _BV(CS22);
+}
 /****************************************************************************************************
  * Arduino main function
 ****************************************************************************************************/
@@ -1117,16 +1124,17 @@ void setup()
 {
   delay(10);
   Serial.begin(115200);
-  // pwm_frequency_init();
+  pwm_frequency_init();
   // pinMode(INT_1_PIN, INPUT_PULLUP);
   // pinMode(DIR_1_PIN, INPUT_PULLUP);
   // pinMode(INT_2_PIN, INPUT_PULLUP);
   // pinMode(DIR_2_PIN, INPUT_PULLUP);
-  // pinMode(MOTOR_1_H1, OUTPUT);
-  // pinMode(MOTOR_2_H1, OUTPUT);
+
+  pinMode(MOTOR_1_H1, OUTPUT);
+  pinMode(MOTOR_2_H1, OUTPUT);
 
   // These lines enable interrupt on falling edge of INT0 (PD2)(arduino pin 2) and INT1 (PD3)(arduino pin 3)
-  // Commenting out in order to use the encoder library, which automatically will attach interrupts where applicable.
+  // Commenting out in order to use the encoder library, which automatically will change pin mode and attach interrupts where applicable.
   // EICRA = (1 << ISC11) | (1 << ISC01);
   // EIMSK = (1 << INT0) | (1 << INT1);
 
@@ -1135,28 +1143,134 @@ void setup()
   // delay(10);
   // initMotor();
 
+  motor1Setpoint = 0;
+  motor2Setpoint = 0;
+  motor1PID.SetMode(AUTOMATIC);
+  motor1PID.SetMode(AUTOMATIC);
+  motor1PID.SetOutputLimits(-255, 255);
+
   // I2C_init((dev_id) << 1);
   I2C_init((DEFAULT_I2C_ADDR) << 1);
-  Serial.println("Driver board says heeellloooo!!!! Much power! Such high current! Wow!");
+  // Serial.println("Driver board says heeellloooo!!!! Much power! Such high current! Wow!");
 }
 
 // char Uart_Buf[64];
 // char bufindex;
+
+#define ENCODERVALUESARRAYLENGTH 100
+
+int motorEncoder1Pos = 0;
+int motorEncoder1Delta = 0;
+int16_t encoder1Values[ENCODERVALUESARRAYLENGTH];
+int encoder1ValuesIndex = 0;
+int encoder1ValuesSum = 0;
+float encoder1MovingAvg = 0;
+float encoder1Speed = 0;
+
+int motorEncoder2Pos = 0;
+int motorEncoder2Delta = 0;
+int16_t encoder2Values[ENCODERVALUESARRAYLENGTH];
+int encoder2ValuesIndex = 0;
+int encoder2ValuesSum = 0;
+float encoder2MovingAvg = 0;
+float encoder2Speed = 0;
+
+const unsigned long encoderUpdateInterval = 2;
+unsigned long encoderUpdateStamp = 0;
+
+unsigned long now = 0;
+unsigned long loopTime = 0;
+bool sampleTimeIsSet = false;
+
+unsigned long setPointStamp = 0;
 void loop()
 {
-  long newValueEncoder1, newValueEncoder2;
-  newValueEncoder1 = motorEncoder1.read();
-  newValueEncoder2 = motorEncoder2.read();
-  if (newValueEncoder1 != motorEncoder1Pos || newValueEncoder2 != motorEncoder2Pos)
+  loopTime = millis() - now;
+  now = millis();
+  if (millis() > 500 && !sampleTimeIsSet)
   {
-    Serial.print("motorEncoder1 = ");
-    Serial.print(newValueEncoder1);
-    Serial.print(", motorEncoder2 = ");
-    Serial.print(newValueEncoder2);
-    Serial.println();
+    sampleTimeIsSet = true;
+    motor1PID.SetSampleTime(loopTime);
+    // Serial.println("Setting sampletime for PID");
+  }
+  if (now - setPointStamp > 5000)
+  {
+    setPointStamp = now;
+    motor1Setpoint = (float)random(100) * 0.04;
+  }
+  if (now - encoderUpdateStamp > encoderUpdateInterval)
+  {
+    //Rather than setting the stamp to now we increment with interval. This is to have the interval more exact on average.
+    //The error introduced in one interval should get corrected for in the next interval, if you get what I mean.
+    //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
+    //The interval will then run each time the if-statement is called.
+    encoderUpdateStamp += encoderUpdateInterval;
+
+    long newValueEncoder1, newValueEncoder2;
+    newValueEncoder1 = motorEncoder1.read();
+    newValueEncoder2 = motorEncoder2.read();
+    if (newValueEncoder1 != motorEncoder1Pos || newValueEncoder2 != motorEncoder2Pos)
+    {
+      // Serial.print("motorEncoder1 = ");
+      // Serial.print(newValueEncoder1);
+      // Serial.print(", motorEncoder2 = ");
+      // Serial.print(newValueEncoder2);
+      // Serial.println();
+    }
+    motorEncoder1Delta = motorEncoder1Pos - newValueEncoder1;
+    motorEncoder2Delta = motorEncoder2Pos - newValueEncoder2;
     motorEncoder1Pos = newValueEncoder1;
     motorEncoder2Pos = newValueEncoder2;
+
+    //Save encoder values
+
+    encoder1ValuesSum -= encoder1Values[encoder1ValuesIndex];
+    encoder2ValuesSum -= encoder2Values[encoder2ValuesIndex];
+
+    encoder1Values[encoder1ValuesIndex] = motorEncoder1Delta;
+    encoder2Values[encoder2ValuesIndex] = motorEncoder2Delta;
+
+    encoder1ValuesSum += encoder1Values[encoder1ValuesIndex];
+    encoder2ValuesSum += encoder2Values[encoder2ValuesIndex];
+
+    encoder1MovingAvg = (float)encoder1ValuesSum / (float)ENCODERVALUESARRAYLENGTH;
+    encoder2MovingAvg = (float)encoder2ValuesSum / (float)ENCODERVALUESARRAYLENGTH;
+
+    encoder1ValuesIndex++;
+    encoder1ValuesIndex %= ENCODERVALUESARRAYLENGTH;
+    encoder2ValuesIndex++;
+    encoder2ValuesIndex %= ENCODERVALUESARRAYLENGTH;
+
+    // NOT CORRECT WAY TO GET THE SPEED IN SI UNITS. It's an approximation
+    encoder1Speed = (float)(encoder1MovingAvg / ((float)encoderUpdateInterval / 1000.0));
+    encoder2Speed = (float)(encoder2MovingAvg / ((float)encoderUpdateInterval / 1000.0));
+
+    // Serial.print(encoder1Speed);
+    // Serial.print('\t');
+    // Serial.println(encoder2Speed);
   }
+
+  //PID Operation
+  // motor1Setpoint = 3;
+
+  motor1Input = encoder1MovingAvg;
+
+  motor1PID.Compute();
+
+  setMotor1Pwm(motor1Output);
+  motor2PID.Compute();
+
+  // Serial.print("PID setpoint: ");
+  // Serial.print(motor1Setpoint);
+  // Serial.print(", PID input: ");
+  // Serial.print(motor1Input);
+  // Serial.print(", PID output: ");
+  // Serial.print(motor1Output);
+  // Serial.println();
+
+  //Serial.println(String(motor1Setpoint) + "," + String(motor1Input) + "," + String(motor1Output));
+
+  Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
 
   // double pwm1_read_temp = 0;
   // double pwm2_read_temp = 0;
