@@ -1214,7 +1214,7 @@ void loop()
   if (now - setPointStamp > 5000)
   {
     setPointStamp = now;
-    motor1Setpoint = (float)random(100) * 0.04;
+    motor2Setpoint = (float)random(100) * 0.04;
   }
   if (now - encoderUpdateStamp > encoderUpdateInterval)
   {
@@ -1291,7 +1291,8 @@ void loop()
 
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input) + "," + String(motor1Output));
 
-  Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
+  //Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
+  Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output));
 
   // double pwm1_read_temp = 0;
   // double pwm2_read_temp = 0;
