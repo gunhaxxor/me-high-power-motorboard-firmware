@@ -1161,8 +1161,10 @@ void setup()
   motor1Setpoint = 0;
   motor2Setpoint = 0;
   motor1PID.SetMode(AUTOMATIC);
-  motor1PID.SetMode(AUTOMATIC);
   motor1PID.SetOutputLimits(-255, 255);
+  
+  motor2PID.SetMode(AUTOMATIC);
+  motor2PID.SetOutputLimits(-255, 255);
 
   // I2C_init((dev_id) << 1);
   I2C_init((DEFAULT_I2C_ADDR) << 1);
@@ -1206,6 +1208,7 @@ void loop()
   {
     sampleTimeIsSet = true;
     motor1PID.SetSampleTime(loopTime);
+    motor2PID.SetSampleTime(loopTime);
     // Serial.println("Setting sampletime for PID");
   }
   if (now - setPointStamp > 5000)
@@ -1269,11 +1272,14 @@ void loop()
   // motor1Setpoint = 3;
 
   motor1Input = encoder1MovingAvg;
+  motor2Input = encoder2MovingAvg;
 
   motor1PID.Compute();
+  motor2PID.Compute();
 
   setMotor1Pwm(motor1Output);
-  motor2PID.Compute();
+  setMotor2Pwm(motor2Output);
+  
 
   // Serial.print("PID setpoint: ");
   // Serial.print(motor1Setpoint);
