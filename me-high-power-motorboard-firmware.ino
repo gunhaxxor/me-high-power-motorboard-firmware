@@ -39,7 +39,7 @@ double motor1Setpoint, motor1Input, motor1Output;
 double motor2Setpoint, motor2Input, motor2Output;
 
 //Specify the links and initial tuning parameters
-double Kp = 40, Ki = 20, Kd = 20;
+double Kp = 80, Ki = 40, Kd = 20;
 PID motor1PID(&motor1Input, &motor1Output, &motor1Setpoint, Kp, Ki, Kd, DIRECT);
 PID motor2PID(&motor2Input, &motor2Output, &motor2Setpoint, Kp, Ki, Kd, DIRECT);
 
