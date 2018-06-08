@@ -212,6 +212,7 @@ void ParseI2cCmd(char *c)
     break;
   case CMD_MOVE_SPD:
     // move_speed(slot, (uint8_t)val.floatVal[0], val.floatVal[1]);
+    move_speed(slot, val.floatVal[1]);
     break;
   case CMD_SET_SPEED_PID:
     // setSpeedPid(slot, val.floatVal[0], val.floatVal[1], val.floatVal[2]);
@@ -1019,6 +1020,20 @@ void setMotor2Pwm(int16_t pwm)
 //   float speed_temp = constrain(speed, MIN_ENCODER_SPEED, MAX_ENCODER_SPEED);
 //   encoder_data[slot].target_speed = speed_temp;
 // }
+
+void move_speed(uint8_t slot, float speed)
+{
+  // TODO Maybe need to add a constrain to make sure speed is within bounds?
+
+  if(slot == 0)
+  {
+    motor1Setpoint = speed;
+  }
+  if(slot == 1)
+  {
+    motor2Setpoint = speed;
+  }
+}
 
 // void setMode(uint8_t slot, uint8_t mode)
 // {
