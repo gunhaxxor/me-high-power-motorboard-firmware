@@ -14,3 +14,8 @@ This firmware is for the Atmega328P (Arduino) that is found on the actual driver
 
 ## Install
 You need a USB-to-serial converter. There are pinouts on the motor board for programming the Atmega328P. You need to connect RX, TX, 5V and GND. Then upload the code to the motor board with the arduino software.
+
+## Based on
+
+Based on the original MakeBlock firmware, but not much is left of it.
+https://github.com/Makeblock-official/Me_EncodeDriver/tree/master/EncodeDriver-HighPower/slave
