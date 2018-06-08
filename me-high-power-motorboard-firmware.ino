@@ -15,7 +15,7 @@
 // #define DEBUG_INFO
 
 //Common parameter configuration
-#define DEFAULT_I2C_ADDR 0x0A
+#define DEFAULT_I2C_ADDR 0x09 // default is 0x09, alternative is 0x0A
 // #define PULSE_PER_C 8
 // #define MOTOR_BOTH 2
 
