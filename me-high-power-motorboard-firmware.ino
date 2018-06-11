@@ -1,4 +1,7 @@
+
 #include <Arduino.h>
+#define millis() millis()/64
+#define delay(x) delay(x/64)
 #include <avr/io.h>
 #include <util/twi.h>
 #include <avr/interrupt.h>
@@ -39,7 +42,8 @@ double motor1Setpoint, motor1Input, motor1Output;
 double motor2Setpoint, motor2Input, motor2Output;
 
 //Specify the links and initial tuning parameters
-double Kp = 80, Ki = 40, Kd = 20;
+// double Kp = 80, Ki = 40, Kd = 20;
+double Kp = 16, Ki = 8, Kd = 4;
 PID motor1PID(&motor1Input, &motor1Output, &motor1Setpoint, Kp, Ki, Kd, DIRECT);
 PID motor2PID(&motor2Input, &motor2Output, &motor2Setpoint, Kp, Ki, Kd, DIRECT);
 
@@ -1131,6 +1135,8 @@ void pwm_frequency_init(void)
 
   // TCCR2A = _BV(WGM21) | _BV(WGM20);
   // TCCR2B = _BV(CS22);
+
+  TCCR0B = TCCR0B & B11111000 | B00000001; // for PWM frequency of 62500.00 Hz
 }
 /****************************************************************************************************
  * Arduino main function
