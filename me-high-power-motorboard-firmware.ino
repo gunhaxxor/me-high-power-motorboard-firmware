@@ -1031,11 +1031,11 @@ void move_speed(uint8_t slot, float speed)
 
   if(slot == 0)
   {
-    motor1Setpoint = speed;
+    motor1Setpoint = speed/10.0;
   }
   if(slot == 1)
   {
-    motor2Setpoint = speed;
+    motor2Setpoint = speed/10.0;
   }
 }
 
