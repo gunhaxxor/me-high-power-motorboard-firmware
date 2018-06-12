@@ -43,7 +43,8 @@ double motor2Setpoint, motor2Input, motor2Output;
 
 //Specify the links and initial tuning parameters
 // double Kp = 80, Ki = 40, Kd = 20;
-double Kp = 16, Ki = 8, Kd = 4;
+//double Kp = 16, Ki = 8, Kd = 4;
+double Kp = 20, Ki = 130, Kd = 0;
 PID motor1PID(&motor1Input, &motor1Output, &motor1Setpoint, Kp, Ki, Kd, DIRECT);
 PID motor2PID(&motor2Input, &motor2Output, &motor2Setpoint, Kp, Ki, Kd, DIRECT);
 
@@ -1298,7 +1299,7 @@ void loop()
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input) + "," + String(motor1Output));
 
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
-  Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output));
+  Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
 
   // double pwm1_read_temp = 0;
   // double pwm2_read_temp = 0;
