@@ -1,7 +1,10 @@
 
+
 #include <Arduino.h>
-//#define millis() millis()/64
-//#define delay(x) delay(x/64)
+#define millis() millis()/64
+#define micros() micros()*64
+#define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
+//#define delayMicroseconds(x) delayMicroseconds(x/64)
 #include <avr/io.h>
 #include <util/twi.h>
 #include <avr/interrupt.h>
