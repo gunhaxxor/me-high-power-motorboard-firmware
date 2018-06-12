@@ -1,7 +1,7 @@
 
 #include <Arduino.h>
-#define millis() millis()/64
-#define delay(x) delay(x/64)
+//#define millis() millis()/64
+//#define delay(x) delay(x/64)
 #include <avr/io.h>
 #include <util/twi.h>
 #include <avr/interrupt.h>
@@ -1136,7 +1136,7 @@ void pwm_frequency_init(void)
   // TCCR2A = _BV(WGM21) | _BV(WGM20);
   // TCCR2B = _BV(CS22);
 
-  TCCR0B = TCCR0B & B11111000 | B00000001; // for PWM frequency of 62500.00 Hz
+  //TCCR0B = TCCR0B & B11111000 | B00000001; // for PWM frequency of 62500.00 Hz
 }
 /****************************************************************************************************
  * Arduino main function
