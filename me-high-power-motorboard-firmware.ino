@@ -1220,7 +1220,7 @@ void loop()
   if (now - setPointStamp > 5000)
   {
     setPointStamp = now;
-    motor2Setpoint = (float)random(100) * 0.04;
+    //motor2Setpoint = (float)random(100) * 0.04;
   }
   if (now - encoderUpdateStamp > encoderUpdateInterval)
   {
