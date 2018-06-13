@@ -43,6 +43,8 @@ Encoder motorEncoder2(INT_2_PIN, DIR_2_PIN);
 //Define Variables we'll be connecting to
 double motor1Setpoint, motor1Input, motor1Output;
 double motor2Setpoint, motor2Input, motor2Output;
+boolean motor1Released = false;
+boolean motor2Released = false;
 
 //Specify the links and initial tuning parameters
 // double Kp = 80, Ki = 40, Kd = 20;
@@ -219,8 +221,7 @@ void ParseI2cCmd(char *c)
     // move(slot, (uint8_t)val.floatVal[0], val.longVal[1], val.floatVal[2]);
     break;
   case CMD_MOVE_SPD:
-    // move_speed(slot, (uint8_t)val.floatVal[0], val.floatVal[1]);
-    move_speed(slot, val.floatVal[1]);
+    move_speed(slot, (uint8_t)val.floatVal[0], val.floatVal[1]);
     break;
   case CMD_SET_SPEED_PID:
     // setSpeedPid(slot, val.floatVal[0], val.floatVal[1], val.floatVal[2]);
@@ -657,6 +658,12 @@ void ParseI2cCmd(char *c)
 
 void setMotor1Pwm(int16_t pwm)
 {
+  if(motor1Released)
+  {
+    analogWrite(MOTOR_1_PWM, 0);
+    return;
+  }
+
   pwm = constrain(pwm, -250, 250);
   if (pwm < 0)
   {
@@ -672,6 +679,12 @@ void setMotor1Pwm(int16_t pwm)
 
 void setMotor2Pwm(int16_t pwm)
 {
+  if(motor2Released)
+  {
+    analogWrite(MOTOR_2_PWM, 0);
+    return;
+  }
+
   pwm = constrain(pwm, -250, 250);
   if (pwm < 0)
   {
@@ -1029,17 +1042,33 @@ void setMotor2Pwm(int16_t pwm)
 //   encoder_data[slot].target_speed = speed_temp;
 // }
 
-void move_speed(uint8_t slot, float speed)
+void move_speed(uint8_t slot, uint8_t state, float speed)
 {
   // TODO Maybe need to add a constrain to make sure speed is within bounds?
 
   if(slot == 0)
   {
     motor1Setpoint = speed/10.0;
+    if(state == LOCK_STATE)
+    {
+      motor1Released = false;
+    }
+    else
+    {
+      motor1Released = true;
+    }
   }
   if(slot == 1)
   {
     motor2Setpoint = speed/10.0;
+    if(state == LOCK_STATE)
+    {
+      motor2Released = false;
+    }
+    else
+    {
+      motor2Released = true;
+    }
   }
 }
 

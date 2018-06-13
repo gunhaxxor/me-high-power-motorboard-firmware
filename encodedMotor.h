@@ -35,8 +35,8 @@
 // #define MOTOR0 MOTOR_0
 // #define MOTOR1 MOTOR_1
 
-// #define LOCK_STATE 0
-// #define RELEASE_STATE 1
+#define LOCK_STATE 0
+#define RELEASE_STATE 1
 
 // #define MOTION_WITH_POS_RELEASE 0x00
 // #define MOTION_WITH_POS_LOCK 0x01
