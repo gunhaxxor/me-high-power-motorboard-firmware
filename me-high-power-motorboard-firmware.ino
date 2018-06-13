@@ -1169,7 +1169,7 @@ void pwm_frequency_init(void)
   // TCCR2A = _BV(WGM21) | _BV(WGM20);
   // TCCR2B = _BV(CS22);
 
-  //TCCR0B = TCCR0B & B11111000 | B00000001; // for PWM frequency of 62500.00 Hz
+  TCCR0B = TCCR0B & B11111000 | B00000001; // for PWM frequency of 62500.00 Hz
 }
 /****************************************************************************************************
  * Arduino main function
@@ -1331,6 +1331,7 @@ void loop()
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input) + "," + String(motor1Output));
 
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
+  //Serial.println(String((millis()/100)%60) + ", " + String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
   Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
 
   // double pwm1_read_temp = 0;
