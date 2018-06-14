@@ -1,10 +1,25 @@
-
+#define PWMCHANGED
 
 #include <Arduino.h>
-#define millis() millis()/64
-#define micros() micros()*64
+#define PWMADJUSTER 32
+#ifdef PWMCHANGED 
+#define millis() millis()/PWMADJUSTER
+#define micros() micros()/PWMADJUSTER
+#if PWMADJUSTER == 64
 #define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
+#endif
+#if PWMADJUSTER == 32
+#define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
+#endif
+#if PWMADJUSTER == 8
+#define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
+#endif
+#if PWMADJUSTER == 4
+#define delay(x) {delay(x);delay(x);delay(x);delay(x);}
+#endif
 //#define delayMicroseconds(x) delayMicroseconds(x/64)
+#endif
+
 #include <avr/io.h>
 #include <util/twi.h>
 #include <avr/interrupt.h>
@@ -1168,12 +1183,64 @@ void pwm_frequency_init(void)
 
   // TCCR2A = _BV(WGM21) | _BV(WGM20);
   // TCCR2B = _BV(CS22);
-
+#ifdef PWMCHANGED
+  //WGM2:0 = 1 //Phase correct mode = half frequency.
+  //TCCR0A : COM0A1 | COM0A0 | COM0B1 | COM0B0 | ------ | ------ | WGM01 | WGM00
+  // TCCR0A = TCCR0A & B11111100 | B00000001;
+  
+  // TCCR0B : FOC0A | FOC0B | ---- | ---- | WGM02 | CS02 | CS01 | CS00
+  #if PWMADJUSTER == 64
   TCCR0B = TCCR0B & B11111000 | B00000001; // for PWM frequency of 62500.00 Hz
+  #elif PWMADJUSTER == 32
+  TCCR0B = TCCR0B & B11110000 | B00000001; // for PWM frequency of 31250.00 Hz
+  TCCR0A = TCCR0A & B11111100 | B00000001;
+  #elif PWMADJUSTER == 8
+  TCCR0B = TCCR0B & B11111000 | B00000010; // 7812.5 Hz 
+  #elif PWMADJUSTER == 4
+  TCCR0B = TCCR0B & B11110000 | B00000010;
+  TCCR0A = TCCR0A & B11111100 | B00000001;
+  #endif
+#endif
 }
 /****************************************************************************************************
  * Arduino main function
 ****************************************************************************************************/
+
+
+// char Uart_Buf[64];
+// char bufindex;
+
+#define ENCODERVALUESARRAYLENGTH 5
+
+int motorEncoder1Pos = 0;
+int motorEncoder1Delta = 0;
+int16_t encoder1Values[ENCODERVALUESARRAYLENGTH];
+int encoder1ValuesIndex = 0;
+int encoder1ValuesSum = 0;
+float encoder1MovingAvg = 0;
+float encoder1Speed = 0;
+
+int motorEncoder2Pos = 0;
+int motorEncoder2Delta = 0;
+int16_t encoder2Values[ENCODERVALUESARRAYLENGTH];
+int encoder2ValuesIndex = 0;
+int encoder2ValuesSum = 0;
+float encoder2MovingAvg = 0;
+float encoder2Speed = 0;
+
+const unsigned long encoderUpdateInterval = 2;
+unsigned long encoderUpdateStamp = 0;
+
+const unsigned long pidUpdateInterval = 10;
+unsigned long pidUpdateStamp = 0;
+
+
+unsigned long now = 0;
+unsigned long loopTime = 0;
+bool sampleTimeIsSet = false;
+
+unsigned long setPointStamp = 0;
+
 void setup()
 {
   delay(10);
@@ -1205,55 +1272,45 @@ void setup()
   motor2PID.SetMode(AUTOMATIC);
   motor2PID.SetOutputLimits(-255, 255);
 
+  motor1PID.SetSampleTime(pidUpdateInterval);
+  motor2PID.SetSampleTime(pidUpdateInterval);
+
   // I2C_init((dev_id) << 1);
   I2C_init((DEFAULT_I2C_ADDR) << 1);
   // Serial.println("Driver board says heeellloooo!!!! Much power! Such high current! Wow!");
 }
 
-// char Uart_Buf[64];
-// char bufindex;
-
-#define ENCODERVALUESARRAYLENGTH 100
-
-int motorEncoder1Pos = 0;
-int motorEncoder1Delta = 0;
-int16_t encoder1Values[ENCODERVALUESARRAYLENGTH];
-int encoder1ValuesIndex = 0;
-int encoder1ValuesSum = 0;
-float encoder1MovingAvg = 0;
-float encoder1Speed = 0;
-
-int motorEncoder2Pos = 0;
-int motorEncoder2Delta = 0;
-int16_t encoder2Values[ENCODERVALUESARRAYLENGTH];
-int encoder2ValuesIndex = 0;
-int encoder2ValuesSum = 0;
-float encoder2MovingAvg = 0;
-float encoder2Speed = 0;
-
-const unsigned long encoderUpdateInterval = 2;
-unsigned long encoderUpdateStamp = 0;
-
-unsigned long now = 0;
-unsigned long loopTime = 0;
-bool sampleTimeIsSet = false;
-
-unsigned long setPointStamp = 0;
 void loop()
 {
+/*  Serial.println(millis());
+  delay(1000);
+}
+
+void commentout() {
+*/
   loopTime = millis() - now;
   now = millis();
+
+  if(loopTime > encoderUpdateInterval)
+  {
+     Serial.println("WARNING long looptime (encoder)");
+  }
+  if(loopTime > pidUpdateInterval)
+  {
+    Serial.println("WARNING long looptime (pid)");
+  }
+  /*
   if (millis() > 500 && !sampleTimeIsSet)
   {
     sampleTimeIsSet = true;
     motor1PID.SetSampleTime(loopTime);
     motor2PID.SetSampleTime(loopTime);
     // Serial.println("Setting sampletime for PID");
-  }
+  }*/
   if (now - setPointStamp > 5000)
   {
     setPointStamp = now;
-    //motor2Setpoint = (float)random(100) * 0.04;
+    //motor2Setpoint = (float)random(-100, 100) * 0.04;
   }
   if (now - encoderUpdateStamp > encoderUpdateInterval)
   {
@@ -1266,14 +1323,14 @@ void loop()
     long newValueEncoder1, newValueEncoder2;
     newValueEncoder1 = motorEncoder1.read();
     newValueEncoder2 = motorEncoder2.read();
-    if (newValueEncoder1 != motorEncoder1Pos || newValueEncoder2 != motorEncoder2Pos)
-    {
-      // Serial.print("motorEncoder1 = ");
-      // Serial.print(newValueEncoder1);
-      // Serial.print(", motorEncoder2 = ");
-      // Serial.print(newValueEncoder2);
-      // Serial.println();
-    }
+    // if (newValueEncoder1 != motorEncoder1Pos || newValueEncoder2 != motorEncoder2Pos)
+    // {
+    //   // Serial.print("motorEncoder1 = ");
+    //   // Serial.print(newValueEncoder1);
+    //   // Serial.print(", motorEncoder2 = ");
+    //   // Serial.print(newValueEncoder2);
+    //   // Serial.println();
+    // }
     motorEncoder1Delta = motorEncoder1Pos - newValueEncoder1;
     motorEncoder2Delta = motorEncoder2Pos - newValueEncoder2;
     motorEncoder1Pos = newValueEncoder1;
@@ -1307,15 +1364,28 @@ void loop()
     // Serial.println(encoder2Speed);
   }
 
-  //PID Operation
-  // motor1Setpoint = 3;
-
   motor1Input = encoder1MovingAvg;
   motor2Input = encoder2MovingAvg;
 
-  motor1PID.Compute();
-  motor2PID.Compute();
+  
 
+  if (now - pidUpdateStamp > pidUpdateInterval)
+  {
+    //Rather than setting the stamp to now we increment with interval. This is to have the interval more exact on average.
+    //The error introduced in one interval should get corrected for in the next interval, if you get what I mean.
+    //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
+    //The interval will then run each time the if-statement is called.
+    pidUpdateStamp += pidUpdateInterval;
+    motor1PID.Compute();
+    motor2PID.Compute();
+
+    Serial.print(motor2Setpoint);
+    Serial.print(", ");
+    Serial.print(motor2Input);
+    Serial.print(", ");
+    Serial.println(motor2Output/10.0);
+  }
+  //Serial.println(loopTime);
   setMotor1Pwm(motor1Output);
   setMotor2Pwm(motor2Output);
   
@@ -1332,7 +1402,8 @@ void loop()
 
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
   //Serial.println(String((millis()/100)%60) + ", " + String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
-  Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
+  //Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
+  
 
   // double pwm1_read_temp = 0;
   // double pwm2_read_temp = 0;
