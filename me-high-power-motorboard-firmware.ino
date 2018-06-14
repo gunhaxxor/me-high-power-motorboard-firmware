@@ -5,25 +5,26 @@
 #ifdef PWMCHANGED 
 #define millis() millis()/PWMADJUSTER
 #define micros() micros()/PWMADJUSTER
-#if PWMADJUSTER == 64
-#define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
-#endif
-#if PWMADJUSTER == 32
-#define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
-#endif
-#if PWMADJUSTER == 8
-#define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
-#endif
-#if PWMADJUSTER == 4
-#define delay(x) {delay(x);delay(x);delay(x);delay(x);}
-#endif
+#define delay( x ) delay( (x) * PWMADJUSTER)
+// #if PWMADJUSTER == 64
+// #define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
+// #endif
+// #if PWMADJUSTER == 32
+// #define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
+// #endif
+// #if PWMADJUSTER == 8
+// #define delay(x) {delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);delay(x);}
+// #endif
+// #if PWMADJUSTER == 4
+// #define delay(x) {delay(x);delay(x);delay(x);delay(x);}
+// #endif
 //#define delayMicroseconds(x) delayMicroseconds(x/64)
 #endif
 
 #include <avr/io.h>
 #include <util/twi.h>
 #include <avr/interrupt.h>
-// #include <EEPROM.h>
+#include <EEPROM.h>
 #include "encodedMotor.h"
 #include <PID_v1.h>
 #include <Encoder.h>
@@ -40,6 +41,9 @@
 // #define PULSE_PER_C 8
 // #define MOTOR_BOTH 2
 
+//EEPROM CONFIG
+#define EEPROM_DEVID_ADDR 3
+
 //GPIO configuration
 #define INT_1_PIN 3
 #define DIR_1_PIN A2
@@ -51,8 +55,12 @@
 #define MOTOR_2_PWM 5
 #define MOTOR_2_H1 8
 
-Encoder motorEncoder1(INT_1_PIN, DIR_1_PIN);
-Encoder motorEncoder2(INT_2_PIN, DIR_2_PIN);
+/*******************
+ * ENCODER CONFIGURATION
+ *******************/ 
+#define ENCODER_PULSES_PER_ROTATION 700.0
+Encoder encoder1(INT_1_PIN, DIR_1_PIN);
+Encoder encoder2(INT_2_PIN, DIR_2_PIN);
 
 //PID config
 //Define Variables we'll be connecting to
@@ -67,14 +75,6 @@ boolean motor2Released = false;
 double Kp = 20, Ki = 130, Kd = 0;
 PID motor1PID(&motor1Input, &motor1Output, &motor1Setpoint, Kp, Ki, Kd, DIRECT);
 PID motor2PID(&motor2Input, &motor2Output, &motor2Setpoint, Kp, Ki, Kd, DIRECT);
-
-//Interrupt Configuration
-// #define MOTOR_1_IRQ INT1_vect
-// #define MOTOR_2_IRQ INT0_vect
-// #define MOTOR_1_PIN PINC
-// #define MOTOR_1_DIR PINC2
-// #define MOTOR_2_PIN PINC
-// #define MOTOR_2_DIR PINC3
 
 /****************************************************************************************************
  * I2C slave code
@@ -323,240 +323,54 @@ void ParseI2cCmd(char *c)
   }
 }
 
-/****************************************************************************************************
- * Serial process code
- * These codes used to start the serial command processing.
-****************************************************************************************************/
-// void parseGcode(char *cmd)
-// {
-//   char *tmp;
-//   char *str;
-//   char g_code_cmd;
-//   str = strtok_r(cmd, " ", &tmp);
-//   g_code_cmd = str[0];
-// #ifdef DEBUG_INFO
-//   Serial.print("g_code_cmd: ");
-//   Serial.println(g_code_cmd);
-// #endif
-//   if (g_code_cmd == '0')
-//   {
-//     resetMotor();
-//   }
-//   else if (g_code_cmd == '1')
-//   {
-//     int8_t slot = MOTOR_0;
-//     int8_t lock_state = LOCK_STATE;
-//     float speed_temp = 0;
-//     long pos_temp = 0;
-//     while (str != NULL)
-//     {
-//       str = strtok_r(0, " ", &tmp);
-//       if ((str[0] == 'D') || (str[0] == 'd'))
-//       {
-//         slot = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'L') || (str[0] == 'l'))
-//       {
-//         lock_state = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'P') || (str[0] == 'p'))
-//       {
-//         pos_temp = atol(str + 1);
-//       }
-//       else if ((str[0] == 'S') || (str[0] == 's'))
-//       {
-//         speed_temp = atof(str + 1);
-//       }
-//     }
-//     moveTo(slot, lock_state, pos_temp, speed_temp);
-//   }
-//   else if (g_code_cmd == '2')
-//   {
-//     int8_t slot = MOTOR_0;
-//     int8_t lock_state = LOCK_STATE;
-//     float speed_temp = 0;
-//     long pos_temp = 0;
-//     while (str != NULL)
-//     {
-//       str = strtok_r(0, " ", &tmp);
-//       if ((str[0] == 'D') || (str[0] == 'd'))
-//       {
-//         slot = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'L') || (str[0] == 'l'))
-//       {
-//         lock_state = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'P') || (str[0] == 'p'))
-//       {
-//         pos_temp = atol(str + 1);
-//       }
-//       else if ((str[0] == 'S') || (str[0] == 's'))
-//       {
-//         speed_temp = atof(str + 1);
-//       }
-//     }
-//     move(slot, lock_state, pos_temp, speed_temp);
-//   }
-//   else if (g_code_cmd == '3')
-//   {
-//     int8_t slot = MOTOR_0;
-//     int8_t lock_state = LOCK_STATE;
-//     float speed_temp = 0;
-//     while (str != NULL)
-//     {
-//       str = strtok_r(0, " ", &tmp);
-//       if ((str[0] == 'D') || (str[0] == 'd'))
-//       {
-//         slot = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'L') || (str[0] == 'l'))
-//       {
-//         lock_state = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'S') || (str[0] == 's'))
-//       {
-//         speed_temp = atof(str + 1);
-//       }
-//     }
-//     move_speed(slot, lock_state, speed_temp);
-//   }
-//   else if (g_code_cmd == '4')
-//   {
-//     int8_t slot = MOTOR_0;
-//     int8_t mode = I2C_MODE;
-//     int16_t pwm = 0;
-//     while (str != NULL)
-//     {
-//       str = strtok_r(0, " ", &tmp);
-//       if ((str[0] == 'D') || (str[0] == 'd'))
-//       {
-//         slot = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'M') || (str[0] == 'm'))
-//       {
-//         mode = atoi(str + 1);
-//       }
-//       else if ((str[0] == 'W') || (str[0] == 'w'))
-//       {
-//         pwm = atoi(str + 1);
-//       }
-//     }
-//     setMode(slot, mode);
-//     set_pwm(slot, pwm);
-//   }
-//   else if (g_code_cmd == '5')
-//   {
-//     int8_t slot = MOTOR_0;
-//     while (str != NULL)
-//     {
-//       str = strtok_r(0, " ", &tmp);
-//       if ((str[0] == 'D') || (str[0] == 'd'))
-//       {
-//         slot = atoi(str + 1);
-//       }
-//     }
-//   }
-//   else if (g_code_cmd == '6')
-//   {
-//     int8_t dev_id = encoder_eeprom.devid;
-//     while (str != NULL)
-//     {
-//       str = strtok_r(0, " ", &tmp);
-//       if ((str[0] == 'D') || (str[0] == 'd'))
-//       {
-//         dev_id = atoi(str + 1);
-//       }
-//     }
-//     setDevid(dev_id);
-//     Serial.print("G6: ");
-//     Serial.println(dev_id);
-//   }
-// }
+/******************************
+ * EEPROM FUNCTIONS
+*******************************/
 
-// void ParseSerialCmd(char *cmd)
-// {
-//   if ((cmd[0] == 'g') || (cmd[0] == 'G'))
-//   {
-//     // gcode
-//     parseGcode(cmd + 1);
-//   }
-// }
+void FloatToEEPROM(int address, int num, float *f)
+{
+  int i, j, bakupaddress;
+  bakupaddress = address + EEPROM.length() / 2;
+  for (i = 0; i < 2; i++)
+  {
+    for (j = 0; j < num; j++)
+    {
+      EEPROM.put(address, f[j]);
+      address = address + sizeof(float);
+    }
+    address = bakupaddress;
+  }
+}
 
-// /****************************************************************************************************
-//  * Parameters configuration
-// ****************************************************************************************************/
-// void setDefaultvalue(void)
-// {
-//   encoder_eeprom.start_data = EEPROM_PID_START;
-//   encoder_eeprom.devid = DEFAULT_I2C_ADDR;
+void IntToEEPROM(int address, int num, uint16_t *data)
+{
+  int i, j, bakupaddress;
+  bakupaddress = address + EEPROM.length() / 2;
+  for (i = 0; i < 2; i++)
+  {
+    for (j = 0; j < num; j++)
+    {
+      EEPROM.put(address, data[j]);
+      address = address + sizeof(uint16_t);
+    }
+    address = bakupaddress;
+  }
+}
 
-//   encoder_eeprom.speed0_p = 0.18;
-//   encoder_eeprom.speed0_i = 0.64;
-//   encoder_eeprom.speed0_d = 0.0;
-//   encoder_eeprom.pos0_p = 1.8;
-//   encoder_eeprom.pos0_i = 0.0;
-//   encoder_eeprom.pos0_d = 1.2;
-//   encoder_eeprom.ratio0 = 26.9;
-//   encoder_eeprom.pulse0 = 7;
-
-//   encoder_eeprom.mid_data = EEPROM_PID_MID;
-
-//   encoder_eeprom.speed1_p = 0.18;
-//   encoder_eeprom.speed1_i = 0.64;
-//   encoder_eeprom.speed1_d = 0.0;
-//   encoder_eeprom.pos1_p = 1.8;
-//   encoder_eeprom.pos1_i = 0.0;
-//   encoder_eeprom.pos1_d = 1.2;
-//   encoder_eeprom.ratio1 = 26.9;
-//   encoder_eeprom.pulse1 = 7;
-//   encoder_eeprom.end_data = EEPROM_PID_END;
-// }
-
-// void FloatToEEPROM(int address, int num, float *f)
-// {
-//   int i, j, bakupaddress;
-//   bakupaddress = address + EEPROM.length() / 2;
-//   for (i = 0; i < 2; i++)
-//   {
-//     for (j = 0; j < num; j++)
-//     {
-//       EEPROM.put(address, f[j]);
-//       address = address + sizeof(float);
-//     }
-//     address = bakupaddress;
-//   }
-// }
-
-// void IntToEEPROM(int address, int num, uint16_t *data)
-// {
-//   int i, j, bakupaddress;
-//   bakupaddress = address + EEPROM.length() / 2;
-//   for (i = 0; i < 2; i++)
-//   {
-//     for (j = 0; j < num; j++)
-//     {
-//       EEPROM.put(address, data[j]);
-//       address = address + sizeof(uint16_t);
-//     }
-//     address = bakupaddress;
-//   }
-// }
-
-// void ByteToEEPROM(int address, int num, uint8_t *data)
-// {
-//   int i, j, bakupaddress;
-//   bakupaddress = address + EEPROM.length() / 2;
-//   for (i = 0; i < 2; i++)
-//   {
-//     for (j = 0; j < num; j++)
-//     {
-//       EEPROM.put(address, data[j]);
-//       address = address + sizeof(uint8_t);
-//     }
-//     address = bakupaddress;
-//   }
-// }
+void ByteToEEPROM(int address, int num, uint8_t *data)
+{
+  int i, j, bakupaddress;
+  bakupaddress = address + EEPROM.length() / 2;
+  for (i = 0; i < 2; i++)
+  {
+    for (j = 0; j < num; j++)
+    {
+      EEPROM.put(address, data[j]);
+      address = address + sizeof(uint8_t);
+    }
+    address = bakupaddress;
+  }
+}
 
 // void writetoEEPROM(void)
 // {
@@ -679,7 +493,7 @@ void setMotor1Pwm(int16_t pwm)
     return;
   }
 
-  pwm = constrain(pwm, -250, 250);
+  pwm = constrain(pwm, -255, 255);
   if (pwm < 0)
   {
     digitalWrite(MOTOR_1_H1, HIGH);
@@ -700,7 +514,7 @@ void setMotor2Pwm(int16_t pwm)
     return;
   }
 
-  pwm = constrain(pwm, -250, 250);
+  pwm = constrain(pwm, -255, 255);
   if (pwm < 0)
   {
     digitalWrite(MOTOR_2_H1, HIGH);
@@ -1057,9 +871,14 @@ void setMotor2Pwm(int16_t pwm)
 //   encoder_data[slot].target_speed = speed_temp;
 // }
 
+/**********************'
+ * slot is which motor. State is whether the motor should be free to move or not. Speed is from -255 to 255.
+************************/ 
 void move_speed(uint8_t slot, uint8_t state, float speed)
 {
   // TODO Maybe need to add a constrain to make sure speed is within bounds?
+  // TODO: Change the scaling to actually reflect how setpoint correlates to pwm speed.
+  // So that we at as many phases along the way think about the speed in terms of pwm (0-255)
 
   if(slot == 0)
   {
@@ -1087,94 +906,17 @@ void move_speed(uint8_t slot, uint8_t state, float speed)
   }
 }
 
-// void setMode(uint8_t slot, uint8_t mode)
-// {
-//   if ((mode == I2C_MODE) || (mode == PWM_I2C_PWM))
-//   {
-//     encoder_data[slot].mode = mode;
-//   }
-//   else
-//   {
-//     encoder_data[slot].mode = PWM_MODE;
-//   }
-// }
+void setDevid(uint8_t devid)
+{
+  // encoder_eeprom.devid = devid;
+  ByteToEEPROM(EEPROM_DEVID_ADDR, 1, &devid);
+}
 
-// void setSpeedPid(uint8_t slot, float p, float i, float d)
-// {
-//   float f[3] = {p, i, d};
-//   if (slot == MOTOR_1)
-//   {
-//     encoder_eeprom.speed1_p = p;
-//     encoder_eeprom.speed1_i = i;
-//     encoder_eeprom.speed1_d = d;
-//     FloatToEEPROM(STORE_PID1_ADDR, 3, f);
-//   }
-//   else
-//   {
-//     encoder_eeprom.speed0_p = p;
-//     encoder_eeprom.speed0_i = i;
-//     encoder_eeprom.speed0_d = d;
-//     FloatToEEPROM(STORE_PID0_ADDR, 3, f);
-//   }
-// }
+uint8_t getDevid(void){
+  uint8_t dev_id = 0;
+  return EEPROM.get(EEPROM_DEVID_ADDR, dev_id);
 
-// void setPosPid(uint8_t slot, float p, float i, float d)
-// {
-//   float f[3] = {p, i, d};
-//   if (slot == MOTOR_1)
-//   {
-//     encoder_eeprom.pos1_p = p;
-//     encoder_eeprom.pos1_i = i;
-//     encoder_eeprom.pos1_d = d;
-//     FloatToEEPROM(STORE_PID1_ADDR + 12, 3, f);
-//   }
-//   else
-//   {
-//     encoder_eeprom.pos0_p = p;
-//     encoder_eeprom.pos0_i = i;
-//     encoder_eeprom.pos0_d = d;
-//     FloatToEEPROM(STORE_PID0_ADDR + 12, 3, f);
-//   }
-// }
-
-// void setRatio(uint8_t slot, float ratio)
-// {
-//   if (slot == MOTOR_1)
-//   {
-//     encoder_eeprom.ratio1 = ratio;
-//     FloatToEEPROM(STORE_RATIO1_ADDR, 1, &ratio);
-//   }
-//   else
-//   {
-//     encoder_eeprom.ratio0 = ratio;
-//     FloatToEEPROM(STORE_RATIO0_ADDR, 1, &ratio);
-//   }
-// }
-
-// void setPulse(uint8_t slot, uint16_t pulse)
-// {
-//   if (slot == MOTOR_1)
-//   {
-//     encoder_eeprom.pulse1 = pulse;
-//     IntToEEPROM(STORE_PLUS1_ADDR, 1, &pulse);
-//   }
-//   else
-//   {
-//     encoder_eeprom.pulse0 = pulse;
-//     IntToEEPROM(STORE_PLUS0_ADDR, 1, &pulse);
-//   }
-// }
-
-// void setDevid(uint8_t devid)
-// {
-//   encoder_eeprom.devid = devid;
-//   ByteToEEPROM(STORE_DEVID_ADDR, 1, &devid);
-// }
-
-// void setCurPos(uint8_t slot, long pos)
-// {
-//   encoder_data[slot].pulse = pos;
-// }
+}
 
 void pwm_frequency_init(void)
 {
@@ -1210,27 +952,80 @@ void pwm_frequency_init(void)
 // char Uart_Buf[64];
 // char bufindex;
 
-#define ENCODERVALUESARRAYLENGTH 5
+#define ENCODERVALUESARRAYLENGTH 100
 
-int motorEncoder1Pos = 0;
-int motorEncoder1Delta = 0;
-int16_t encoder1Values[ENCODERVALUESARRAYLENGTH];
-int encoder1ValuesIndex = 0;
-int encoder1ValuesSum = 0;
-float encoder1MovingAvg = 0;
-float encoder1Speed = 0;
+struct encoderData {
+  int position = 0;
+  int deltaPosition = 0;
+  float deltaSpeed = 0;
+  float deltaSpeeds[ENCODERVALUESARRAYLENGTH];
+  int deltaSpeedsIndex = 0;
+  float deltaSpeedSum = 0;
+  float averageSpeed = 0;
+  float RPM = 0;
+};
 
-int motorEncoder2Pos = 0;
-int motorEncoder2Delta = 0;
-int16_t encoder2Values[ENCODERVALUESARRAYLENGTH];
-int encoder2ValuesIndex = 0;
-int encoder2ValuesSum = 0;
-float encoder2MovingAvg = 0;
-float encoder2Speed = 0;
+struct encoderData enc[2];
 
-const unsigned long encoderUpdateInterval = 2;
+// int encoder1Pos = 0;
+// int encoder1Delta = 0;
+// int16_t encoder1Deltas[ENCODERVALUESARRAYLENGTH];
+// int encoder1DeltasIndex = 0;
+// int encoder1DeltasSum = 0;
+// float encoder1MovingAvg = 0;
+// float encoder1Speed = 0;
+
+// int encoder2Pos = 0;
+// int encoder2Delta = 0;
+// int16_t encoder2Deltas[ENCODERVALUESARRAYLENGTH];
+// int encoder2DeltasIndex = 0;
+// int encoder2DeltasSum = 0;
+// float encoder2MovingAvg = 0;
+// float encoder2Speed = 0;
+
+const unsigned long encoderUpdateInterval = 200;
 unsigned long encoderUpdateStamp = 0;
 
+void updateEncoders(unsigned long now){
+  if (now - encoderUpdateStamp > encoderUpdateInterval)
+  {
+    unsigned long deltaTime = now - encoderUpdateStamp;
+
+    //Rather than setting the stamp to equal *now* we increment with interval. This is to have the interval more exact on average.
+    //The error introduced in one interval should get corrected for in the next interval, if you get what I mean.
+    //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
+    //The interval will then run each time the if-statement is called, but I guess that would happen with normal timestamping aswell.
+    encoderUpdateStamp += encoderUpdateInterval;
+    long newEncValues[2] = {encoder1.read(), encoder2.read()};
+
+    for(int i = 0; i < 2; i++){
+
+      enc[i].deltaPosition = enc[i].position - newEncValues[i];
+      enc[i].position = newEncValues[i];
+
+      enc[i].deltaSpeedSum -= enc[i].deltaSpeeds[enc[i].deltaSpeedsIndex];
+
+      // enc[i].deltaSpeed = (float)enc[i].deltaPosition / (float)deltaTime * 1000.0;
+
+      enc[i].deltaSpeeds[enc[i].deltaSpeedsIndex] = enc[i].deltaPosition;
+
+      enc[i].deltaSpeedSum += enc[i].deltaSpeeds[enc[i].deltaSpeedsIndex];
+
+      enc[i].averageSpeed = (float)enc[i].deltaSpeedSum / (float)ENCODERVALUESARRAYLENGTH;
+
+      enc[i].averageSpeed = enc[i].averageSpeed / (float)deltaTime * 1000.0;
+
+      enc[i].RPM = enc[i].averageSpeed * 60.0 / ENCODER_PULSES_PER_ROTATION;
+
+      enc[i].deltaSpeedsIndex++;
+      enc[i].deltaSpeedsIndex %= ENCODERVALUESARRAYLENGTH;
+
+      Serial.print(enc[i].RPM);
+      Serial.print(",");
+    }
+    Serial.println();
+  }
+}
 const unsigned long pidUpdateInterval = 10;
 unsigned long pidUpdateStamp = 0;
 
@@ -1239,18 +1034,15 @@ unsigned long now = 0;
 unsigned long loopTime = 0;
 bool sampleTimeIsSet = false;
 
-unsigned long setPointStamp = 0;
+// unsigned long setPointStamp = 0;
 
 void setup()
 {
   delay(10);
   Serial.begin(115200);
   pwm_frequency_init();
-  // pinMode(INT_1_PIN, INPUT_PULLUP);
-  // pinMode(DIR_1_PIN, INPUT_PULLUP);
-  // pinMode(INT_2_PIN, INPUT_PULLUP);
-  // pinMode(DIR_2_PIN, INPUT_PULLUP);
 
+  // These pins sets the direction of the motor circuit.
   pinMode(MOTOR_1_H1, OUTPUT);
   pinMode(MOTOR_2_H1, OUTPUT);
 
@@ -1275,19 +1067,13 @@ void setup()
   motor1PID.SetSampleTime(pidUpdateInterval);
   motor2PID.SetSampleTime(pidUpdateInterval);
 
-  // I2C_init((dev_id) << 1);
-  I2C_init((DEFAULT_I2C_ADDR) << 1);
+  I2C_init(getDevid() << 1);
+  // I2C_init((DEFAULT_I2C_ADDR) << 1);
   // Serial.println("Driver board says heeellloooo!!!! Much power! Such high current! Wow!");
 }
 
 void loop()
 {
-/*  Serial.println(millis());
-  delay(1000);
-}
-
-void commentout() {
-*/
   loopTime = millis() - now;
   now = millis();
 
@@ -1299,73 +1085,68 @@ void commentout() {
   {
     Serial.println("WARNING long looptime (pid)");
   }
-  /*
-  if (millis() > 500 && !sampleTimeIsSet)
-  {
-    sampleTimeIsSet = true;
-    motor1PID.SetSampleTime(loopTime);
-    motor2PID.SetSampleTime(loopTime);
-    // Serial.println("Setting sampletime for PID");
-  }*/
-  if (now - setPointStamp > 5000)
-  {
-    setPointStamp = now;
-    //motor2Setpoint = (float)random(-100, 100) * 0.04;
-  }
-  if (now - encoderUpdateStamp > encoderUpdateInterval)
-  {
-    //Rather than setting the stamp to now we increment with interval. This is to have the interval more exact on average.
-    //The error introduced in one interval should get corrected for in the next interval, if you get what I mean.
-    //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
-    //The interval will then run each time the if-statement is called.
-    encoderUpdateStamp += encoderUpdateInterval;
 
-    long newValueEncoder1, newValueEncoder2;
-    newValueEncoder1 = motorEncoder1.read();
-    newValueEncoder2 = motorEncoder2.read();
-    // if (newValueEncoder1 != motorEncoder1Pos || newValueEncoder2 != motorEncoder2Pos)
-    // {
-    //   // Serial.print("motorEncoder1 = ");
-    //   // Serial.print(newValueEncoder1);
-    //   // Serial.print(", motorEncoder2 = ");
-    //   // Serial.print(newValueEncoder2);
-    //   // Serial.println();
-    // }
-    motorEncoder1Delta = motorEncoder1Pos - newValueEncoder1;
-    motorEncoder2Delta = motorEncoder2Pos - newValueEncoder2;
-    motorEncoder1Pos = newValueEncoder1;
-    motorEncoder2Pos = newValueEncoder2;
+  updateEncoders(now);
+  // setMotor1Pwm(-120);
+  setMotor2Pwm(140);
+  return;
 
-    //Save encoder values
+  // //TODO: Make the encoderMovingAvg values not be dependent on encoder interval!
+  // if (now - encoderUpdateStamp > encoderUpdateInterval)
+  // {
+  //   unsigned long deltaTime = now - encoderUpdateStamp;
 
-    encoder1ValuesSum -= encoder1Values[encoder1ValuesIndex];
-    encoder2ValuesSum -= encoder2Values[encoder2ValuesIndex];
+  //   //Rather than setting the stamp to equal *now* we increment with interval. This is to have the interval more exact on average.
+  //   //The error introduced in one interval should get corrected for in the next interval, if you get what I mean.
+  //   //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
+  //   //The interval will then run each time the if-statement is called, but I guess that would happen with normal timestamping aswell.
+  //   encoderUpdateStamp += encoderUpdateInterval;
 
-    encoder1Values[encoder1ValuesIndex] = motorEncoder1Delta;
-    encoder2Values[encoder2ValuesIndex] = motorEncoder2Delta;
+  //   long newValueEncoder1, newValueEncoder2;
+  //   newValueEncoder1 = encoder1.read();
+  //   newValueEncoder2 = encoder2.read();
 
-    encoder1ValuesSum += encoder1Values[encoder1ValuesIndex];
-    encoder2ValuesSum += encoder2Values[encoder2ValuesIndex];
+  //   encoder1Delta = encoder1Pos - newValueEncoder1;
+  //   encoder2Delta = encoder2Pos - newValueEncoder2;
+  //   encoder1Pos = newValueEncoder1;
+  //   encoder2Pos = newValueEncoder2;
 
-    encoder1MovingAvg = (float)encoder1ValuesSum / (float)ENCODERVALUESARRAYLENGTH;
-    encoder2MovingAvg = (float)encoder2ValuesSum / (float)ENCODERVALUESARRAYLENGTH;
+  //   //Save encoder values
 
-    encoder1ValuesIndex++;
-    encoder1ValuesIndex %= ENCODERVALUESARRAYLENGTH;
-    encoder2ValuesIndex++;
-    encoder2ValuesIndex %= ENCODERVALUESARRAYLENGTH;
+  //   encoder1DeltasSum -= encoder1Deltas[encoder1DeltasIndex];
+  //   encoder2DeltasSum -= encoder2Deltas[encoder2DeltasIndex];
 
-    // NOT CORRECT WAY TO GET THE SPEED IN SI UNITS. It's an approximation
-    encoder1Speed = (float)(encoder1MovingAvg / ((float)encoderUpdateInterval / 1000.0));
-    encoder2Speed = (float)(encoder2MovingAvg / ((float)encoderUpdateInterval / 1000.0));
+  //   // encoder1Deltas[encoder1DeltasIndex] = encoder1Delta;
+  //   // encoder2Deltas[encoder2DeltasIndex] = encoder2Delta;
 
-    // Serial.print(encoder1Speed);
-    // Serial.print('\t');
-    // Serial.println(encoder2Speed);
-  }
+  //   encoder1Delta = (float)encoder1Delta / (float)deltaTime * 1000.0;
+  //   encoder2Delta = (float)encoder2Delta / (float)deltaTime * 1000.0;
 
-  motor1Input = encoder1MovingAvg;
-  motor2Input = encoder2MovingAvg;
+  //   encoder1Deltas[encoder1DeltasIndex] = encoder1Delta;
+  //   encoder2Deltas[encoder2DeltasIndex] = encoder2Delta;
+
+  //   encoder1DeltasSum += encoder1Deltas[encoder1DeltasIndex];
+  //   encoder2DeltasSum += encoder2Deltas[encoder2DeltasIndex];
+
+  //   encoder1MovingAvg = (float)encoder1DeltasSum / (float)ENCODERVALUESARRAYLENGTH;
+  //   encoder2MovingAvg = (float)encoder2DeltasSum / (float)ENCODERVALUESARRAYLENGTH;
+
+  //   encoder1DeltasIndex++;
+  //   encoder1DeltasIndex %= ENCODERVALUESARRAYLENGTH;
+  //   encoder2DeltasIndex++;
+  //   encoder2DeltasIndex %= ENCODERVALUESARRAYLENGTH;
+
+  //   // NOT CORRECT WAY TO GET THE SPEED IN SI UNITS. It's an approximation
+  //   // encoder1Speed = (float)encoder1MovingAvg / (float)encoderUpdateInterval * 1000.0;
+  //   // encoder2Speed = (float)encoder2MovingAvg / (float)encoderUpdateInterval * 1000.0;
+
+  //   // Serial.print(encoder1Speed);
+  //   // Serial.print('\t');
+  //   // Serial.println(encoder2Speed);
+  // }
+
+  // motor1Input = encoder1MovingAvg;
+  // motor2Input = encoder2MovingAvg;
 
   
 
