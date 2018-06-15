@@ -69,12 +69,19 @@ double motor2Setpoint, motor2Input, motor2Output;
 boolean motor1Released = false;
 boolean motor2Released = false;
 
+// PWM RANGE CONFIG
+// this is some weird hack to skip setpoint values that won't make the motor move.
+// This should hopefully make the PID more responsive. Especially when suddenly changing direction.
+// We basically skip the lower parts of the setpoint in order to quicker reach actual movement of the motor.
+#define PWM_NO_MOTION_THRESHOLD 2.0
+#define PWM_MOTION_THRESHOLD 100.0
+
 //Specify the links and initial tuning parameters
 // double Kp = 80, Ki = 40, Kd = 20;
 //double Kp = 16, Ki = 8, Kd = 4;
 double Kp = 20, Ki = 130, Kd = 0;
-PID motor1PID(&motor1Input, &motor1Output, &motor1Setpoint, Kp, Ki, Kd, DIRECT);
-PID motor2PID(&motor2Input, &motor2Output, &motor2Setpoint, Kp, Ki, Kd, DIRECT);
+PID motor1PID(&motor1Input, &motor1Output, &motor1Setpoint, Kp, Ki, Kd, REVERSE);
+PID motor2PID(&motor2Input, &motor2Output, &motor2Setpoint, Kp, Ki, Kd, REVERSE);
 
 /****************************************************************************************************
  * I2C slave code
@@ -261,7 +268,7 @@ void ParseI2cCmd(char *c)
     // setPulse(slot, val.intVal[0]);
     break;
   case CMD_SET_DEVID:
-    // setDevid(val.byteVal[0]);
+    setDevid(val.byteVal[0]);
     break;
   case CMD_GET_SPEED_PID:
     // if (slot == MOTOR_1)
@@ -467,25 +474,25 @@ void ByteToEEPROM(int address, int num, uint8_t *data)
 //   }
 // }
 
-// void setMotorPwm(uint8_t slot, int16_t pwm)
-// {
-//   //  Serial.print("mode:");
-//   //  Serial.print(encoder_data[slot].mode);
-//   //  Serial.print(" ,slot:");
-//   //  Serial.print(slot);
-//   //  Serial.print(" ,pwm:");
-//   //  Serial.println(pwm);
-//   if (slot == MOTOR_1)
-//   {
-//     setMotor2Pwm(pwm);
-//   }
-//   else
-//   {
-//     setMotor1Pwm(pwm);
-//   }
-// }
+void setMotorPwm(uint8_t slot, int16_t setpoint)
+{
+  //  Serial.print("mode:");
+  //  Serial.print(encoder_data[slot].mode);
+  //  Serial.print(" ,slot:");
+  //  Serial.print(slot);
+  //  Serial.print(" ,setpoint:");
+  //  Serial.println(setpoint);
+  if (slot == 1)
+  {
+    setMotor2Pwm(setpoint);
+  }
+  else
+  {
+    setMotor1Pwm(setpoint);
+  }
+}
 
-void setMotor1Pwm(int16_t pwm)
+void setMotor1Pwm(int16_t setpoint)
 {
   if(motor1Released)
   {
@@ -493,20 +500,20 @@ void setMotor1Pwm(int16_t pwm)
     return;
   }
 
-  pwm = constrain(pwm, -255, 255);
-  if (pwm < 0)
+  setpoint = constrain(setpoint, -250, 250);
+  if (setpoint < 0)
   {
     digitalWrite(MOTOR_1_H1, HIGH);
-    analogWrite(MOTOR_1_PWM, abs(pwm));
+    analogWrite(MOTOR_1_PWM, abs(setpoint));
   }
   else
   {
     digitalWrite(MOTOR_1_H1, LOW);
-    analogWrite(MOTOR_1_PWM, abs(pwm));
+    analogWrite(MOTOR_1_PWM, abs(setpoint));
   }
 }
 
-void setMotor2Pwm(int16_t pwm)
+void setMotor2Pwm(int16_t setpoint)
 {
   if(motor2Released)
   {
@@ -514,16 +521,16 @@ void setMotor2Pwm(int16_t pwm)
     return;
   }
 
-  pwm = constrain(pwm, -255, 255);
-  if (pwm < 0)
+  setpoint = constrain(setpoint, -250, 250);
+  if (setpoint < 0)
   {
     digitalWrite(MOTOR_2_H1, HIGH);
-    analogWrite(MOTOR_2_PWM, abs(pwm));
+    analogWrite(MOTOR_2_PWM, abs(setpoint));
   }
   else
   {
     digitalWrite(MOTOR_2_H1, LOW);
-    analogWrite(MOTOR_2_PWM, abs(pwm));
+    analogWrite(MOTOR_2_PWM, abs(setpoint));
   }
 }
 
@@ -565,9 +572,9 @@ void setMotor2Pwm(int16_t pwm)
 //   }
 // }
 
-// void set_pwm(uint8_t slot, int pwm)
+// void set_pwm(uint8_t slot, int setpoint)
 // {
-//   encoder_data[slot].tar_pwm = pwm;
+//   encoder_data[slot].tar_pwm = setpoint;
 // }
 
 // void pwm_move(uint8_t slot)
@@ -877,12 +884,12 @@ void setMotor2Pwm(int16_t pwm)
 void move_speed(uint8_t slot, uint8_t state, float speed)
 {
   // TODO Maybe need to add a constrain to make sure speed is within bounds?
-  // TODO: Change the scaling to actually reflect how setpoint correlates to pwm speed.
-  // So that we at as many phases along the way think about the speed in terms of pwm (0-255)
+  // TODO: Change the scaling to actually reflect how setpoint correlates to setpoint speed.
+  // So that we at as many phases along the way think about the speed in terms of setpoint (0-255)
 
   if(slot == 0)
   {
-    motor1Setpoint = speed/10.0;
+    motor1Setpoint = speed;
     if(state == LOCK_STATE)
     {
       motor1Released = false;
@@ -894,7 +901,7 @@ void move_speed(uint8_t slot, uint8_t state, float speed)
   }
   if(slot == 1)
   {
-    motor2Setpoint = speed/10.0;
+    motor2Setpoint = speed;
     if(state == LOCK_STATE)
     {
       motor2Released = false;
@@ -952,17 +959,20 @@ void pwm_frequency_init(void)
 // char Uart_Buf[64];
 // char bufindex;
 
+#define WHEELCIRCUMFERENCEMM 314.159265359
 #define ENCODERVALUESARRAYLENGTH 100
 
 struct encoderData {
   int position = 0;
   int deltaPosition = 0;
+  float filteredDeltaPosition = 0;
+  int deltaPositions[ENCODERVALUESARRAYLENGTH];
+  int deltaPositionsIndex = 0;
+  int deltaPositionSum = 0;
   float deltaSpeed = 0;
-  float deltaSpeeds[ENCODERVALUESARRAYLENGTH];
-  int deltaSpeedsIndex = 0;
-  float deltaSpeedSum = 0;
-  float averageSpeed = 0;
+  float ticksPerMs = 0;
   float RPM = 0;
+  float metersPerSecond = 0;
 };
 
 struct encoderData enc[2];
@@ -983,48 +993,58 @@ struct encoderData enc[2];
 // float encoder2MovingAvg = 0;
 // float encoder2Speed = 0;
 
-const unsigned long encoderUpdateInterval = 200;
+
+const unsigned long encoderUpdateInterval = 5;
 unsigned long encoderUpdateStamp = 0;
+float encoderFilterC = 0.1;
+unsigned long encoderWrapDuration = 0;
+unsigned long encoderWrapStamp = 0;
 
 void updateEncoders(unsigned long now){
-  if (now - encoderUpdateStamp > encoderUpdateInterval)
-  {
-    unsigned long deltaTime = now - encoderUpdateStamp;
+  if (now - encoderUpdateStamp > encoderUpdateInterval){
 
     //Rather than setting the stamp to equal *now* we increment with interval. This is to have the interval more exact on average.
     //The error introduced in one interval should get corrected for in the next interval, if you get what I mean.
     //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
     //The interval will then run each time the if-statement is called, but I guess that would happen with normal timestamping aswell.
     encoderUpdateStamp += encoderUpdateInterval;
+
+    //If due, calculate wraparound duration.
+    //We use the duration for the wraparound instead of the duration for each interval.
+    //It seems this give better accuracy.
+    if(enc[1].deltaPositionsIndex == 0){
+      encoderWrapDuration = now - encoderWrapStamp;
+      encoderWrapStamp = now;
+    }
+
     long newEncValues[2] = {encoder1.read(), encoder2.read()};
-
     for(int i = 0; i < 2; i++){
-
-      enc[i].deltaPosition = enc[i].position - newEncValues[i];
+      enc[i].deltaPosition = newEncValues[i] - enc[i].position;
       enc[i].position = newEncValues[i];
 
-      enc[i].deltaSpeedSum -= enc[i].deltaSpeeds[enc[i].deltaSpeedsIndex];
+      // accumulating part
+      {
+        enc[i].deltaPositionSum -= enc[i].deltaPositions[enc[i].deltaPositionsIndex];
 
-      // enc[i].deltaSpeed = (float)enc[i].deltaPosition / (float)deltaTime * 1000.0;
+        // enc[i].deltaSpeed = (float)enc[i].deltaPosition / (float)deltaTime * 1000.0;
 
-      enc[i].deltaSpeeds[enc[i].deltaSpeedsIndex] = enc[i].deltaPosition;
+        enc[i].deltaPositions[enc[i].deltaPositionsIndex] = enc[i].deltaPosition;
 
-      enc[i].deltaSpeedSum += enc[i].deltaSpeeds[enc[i].deltaSpeedsIndex];
+        enc[i].deltaPositionSum += enc[i].deltaPositions[enc[i].deltaPositionsIndex];
 
-      enc[i].averageSpeed = (float)enc[i].deltaSpeedSum / (float)ENCODERVALUESARRAYLENGTH;
+        enc[i].deltaPositionsIndex++;
+        enc[i].deltaPositionsIndex %= ENCODERVALUESARRAYLENGTH;
+      }
 
-      enc[i].averageSpeed = enc[i].averageSpeed / (float)deltaTime * 1000.0;
+      enc[i].ticksPerMs = (float) enc[i].deltaPositionSum / (float) encoderWrapDuration;
+      enc[i].RPM = enc[i].ticksPerMs * 1000.0 * 60.0 / ENCODER_PULSES_PER_ROTATION;
+      enc[i].metersPerSecond = (enc[i].RPM / 60.0) * (WHEELCIRCUMFERENCEMM / 1000.0);
 
-      enc[i].RPM = enc[i].averageSpeed * 60.0 / ENCODER_PULSES_PER_ROTATION;
-
-      enc[i].deltaSpeedsIndex++;
-      enc[i].deltaSpeedsIndex %= ENCODERVALUESARRAYLENGTH;
-
-      Serial.print(enc[i].RPM);
-      Serial.print(",");
+      // Serial.print(enc[i].metersPerSecond);
+      // Serial.print(", \t");
     }
-    Serial.println();
-  }
+    // Serial.println();
+  }  
 }
 const unsigned long pidUpdateInterval = 10;
 unsigned long pidUpdateStamp = 0;
@@ -1034,7 +1054,9 @@ unsigned long now = 0;
 unsigned long loopTime = 0;
 bool sampleTimeIsSet = false;
 
-// unsigned long setPointStamp = 0;
+
+unsigned long randomSetpointStamp = 0;
+
 
 void setup()
 {
@@ -1059,10 +1081,10 @@ void setup()
   motor1Setpoint = 0;
   motor2Setpoint = 0;
   motor1PID.SetMode(AUTOMATIC);
-  motor1PID.SetOutputLimits(-255, 255);
+  motor1PID.SetOutputLimits(-250 + PWM_MOTION_THRESHOLD, 250 - PWM_MOTION_THRESHOLD);
   
   motor2PID.SetMode(AUTOMATIC);
-  motor2PID.SetOutputLimits(-255, 255);
+  motor2PID.SetOutputLimits(-250 + PWM_MOTION_THRESHOLD, 250 - PWM_MOTION_THRESHOLD);
 
   motor1PID.SetSampleTime(pidUpdateInterval);
   motor2PID.SetSampleTime(pidUpdateInterval);
@@ -1087,68 +1109,12 @@ void loop()
   }
 
   updateEncoders(now);
-  // setMotor1Pwm(-120);
-  setMotor2Pwm(140);
-  return;
 
-  // //TODO: Make the encoderMovingAvg values not be dependent on encoder interval!
-  // if (now - encoderUpdateStamp > encoderUpdateInterval)
-  // {
-  //   unsigned long deltaTime = now - encoderUpdateStamp;
-
-  //   //Rather than setting the stamp to equal *now* we increment with interval. This is to have the interval more exact on average.
-  //   //The error introduced in one interval should get corrected for in the next interval, if you get what I mean.
-  //   //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
-  //   //The interval will then run each time the if-statement is called, but I guess that would happen with normal timestamping aswell.
-  //   encoderUpdateStamp += encoderUpdateInterval;
-
-  //   long newValueEncoder1, newValueEncoder2;
-  //   newValueEncoder1 = encoder1.read();
-  //   newValueEncoder2 = encoder2.read();
-
-  //   encoder1Delta = encoder1Pos - newValueEncoder1;
-  //   encoder2Delta = encoder2Pos - newValueEncoder2;
-  //   encoder1Pos = newValueEncoder1;
-  //   encoder2Pos = newValueEncoder2;
-
-  //   //Save encoder values
-
-  //   encoder1DeltasSum -= encoder1Deltas[encoder1DeltasIndex];
-  //   encoder2DeltasSum -= encoder2Deltas[encoder2DeltasIndex];
-
-  //   // encoder1Deltas[encoder1DeltasIndex] = encoder1Delta;
-  //   // encoder2Deltas[encoder2DeltasIndex] = encoder2Delta;
-
-  //   encoder1Delta = (float)encoder1Delta / (float)deltaTime * 1000.0;
-  //   encoder2Delta = (float)encoder2Delta / (float)deltaTime * 1000.0;
-
-  //   encoder1Deltas[encoder1DeltasIndex] = encoder1Delta;
-  //   encoder2Deltas[encoder2DeltasIndex] = encoder2Delta;
-
-  //   encoder1DeltasSum += encoder1Deltas[encoder1DeltasIndex];
-  //   encoder2DeltasSum += encoder2Deltas[encoder2DeltasIndex];
-
-  //   encoder1MovingAvg = (float)encoder1DeltasSum / (float)ENCODERVALUESARRAYLENGTH;
-  //   encoder2MovingAvg = (float)encoder2DeltasSum / (float)ENCODERVALUESARRAYLENGTH;
-
-  //   encoder1DeltasIndex++;
-  //   encoder1DeltasIndex %= ENCODERVALUESARRAYLENGTH;
-  //   encoder2DeltasIndex++;
-  //   encoder2DeltasIndex %= ENCODERVALUESARRAYLENGTH;
-
-  //   // NOT CORRECT WAY TO GET THE SPEED IN SI UNITS. It's an approximation
-  //   // encoder1Speed = (float)encoder1MovingAvg / (float)encoderUpdateInterval * 1000.0;
-  //   // encoder2Speed = (float)encoder2MovingAvg / (float)encoderUpdateInterval * 1000.0;
-
-  //   // Serial.print(encoder1Speed);
-  //   // Serial.print('\t');
-  //   // Serial.println(encoder2Speed);
+  // motor2Setpoint = 0.6;
+  // if(now - randomSetpointStamp > 2000){
+  //   randomSetpointStamp = now;
+  //   pickRandomSetpoint(1, -2, 2);
   // }
-
-  // motor1Input = encoder1MovingAvg;
-  // motor2Input = encoder2MovingAvg;
-
-  
 
   if (now - pidUpdateStamp > pidUpdateInterval)
   {
@@ -1157,18 +1123,32 @@ void loop()
     //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
     //The interval will then run each time the if-statement is called.
     pidUpdateStamp += pidUpdateInterval;
+
+    motor1Input = enc[0].metersPerSecond;
+    motor2Input = enc[1].metersPerSecond;
+
     motor1PID.Compute();
     motor2PID.Compute();
+
+    int16_t motor1PwmValue = rescalePwmValue(motor1Output);
+    int16_t motor2PwmValue = rescalePwmValue(motor2Output);
+
+    setMotorPwm(0, motor1PwmValue);
+    setMotorPwm(1, motor2PwmValue);
 
     Serial.print(motor2Setpoint);
     Serial.print(", ");
     Serial.print(motor2Input);
     Serial.print(", ");
-    Serial.println(motor2Output/10.0);
+    Serial.print(motor2Output/10.0);
+    Serial.print(", ");
+    Serial.print(motor2PwmValue);
+    Serial.println(",");
   }
   //Serial.println(loopTime);
-  setMotor1Pwm(motor1Output);
-  setMotor2Pwm(motor2Output);
+  
+  
+  
   
 
   // Serial.print("PID setpoint: ");
@@ -1184,72 +1164,26 @@ void loop()
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
   //Serial.println(String((millis()/100)%60) + ", " + String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
   //Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
-  
+}
 
-  // double pwm1_read_temp = 0;
-  // double pwm2_read_temp = 0;
-  // //G code processing
-  // while (Serial.available() > 0)
-  // {
-  //   char c = Serial.read();
-  //   Serial.write(c);
-  //   Uart_Buf[bufindex++] = c;
-  //   if ((c == '\n') || (c == '#'))
-  //   {
-  //     ParseSerialCmd(Uart_Buf);
-  //     memset(Uart_Buf, 0, 64);
-  //     bufindex = 0;
-  //   }
-  // }
-  // updateCurPos();
-  // updateSpeed();
+int16_t rescalePwmValue(float setpoint){
+  if(abs(setpoint) < PWM_NO_MOTION_THRESHOLD)
+    setpoint = 0;
+  else{
+    if(setpoint > 0){
+      setpoint += PWM_MOTION_THRESHOLD;
+    }else{
+      setpoint -= PWM_MOTION_THRESHOLD;
+    }
+  }
+  return setpoint;
+}
 
-  // if (encoder_data[MOTOR_0].mode == PWM_MODE)
-  // {
-  //   for (int i = 0; i < 20; i++)
-  //   {
-  //     pwm1_read_temp = pwm1_read_temp + analogRead(A1); //Read PWM values
-  //   }
-  //   encoder_data[MOTOR_0].tar_pwm = (pwm1_read_temp / 20 - 512) * 255 / 512;
-  // }
-
-  // if (encoder_data[MOTOR_1].mode == PWM_MODE)
-  // {
-  //   for (int i = 0; i < 20; i++)
-  //   {
-  //     pwm2_read_temp = pwm2_read_temp + analogRead(A0); //Read PWM values
-  //   }
-  //   encoder_data[MOTOR_1].tar_pwm = (pwm2_read_temp / 20 - 512) * 255 / 512;
-  // }
-
-  // //encoder move
-  // if (encoder_data[MOTOR_0].mode == I2C_MODE)
-  // {
-  //   encoder_move(MOTOR_0);
-  //   setMotorPwm(MOTOR_0, encoder_data[MOTOR_0].cur_pwm);
-  // }
-  // else
-  // {
-  //   pwm_move(MOTOR_0);
-  //   setMotorPwm(MOTOR_0, encoder_data[MOTOR_0].cur_pwm);
-  // }
-
-  // if (encoder_data[MOTOR_1].mode == I2C_MODE)
-  // {
-  //   encoder_move(MOTOR_1);
-  //   setMotorPwm(MOTOR_1, encoder_data[MOTOR_1].cur_pwm);
-  // }
-  // else
-  // {
-  //   pwm_move(MOTOR_1);
-  //   setMotorPwm(MOTOR_1, encoder_data[MOTOR_1].cur_pwm);
-  // }
-  //  Serial.print("cur0:");
-  //  Serial.print(encoder_data[MOTOR_0].cur_pwm);
-  //  Serial.print(" ,cur1:");
-  //  Serial.print(encoder_data[MOTOR_1].cur_pwm);
-  //  Serial.print(" ,tar0:");
-  //  Serial.print(encoder_data[MOTOR_0].tar_pwm);
-  //  Serial.print(" ,tar1:");
-  //  Serial.println(encoder_data[MOTOR_1].tar_pwm);
+void pickRandomSetpoint(int slot, float min, float max){
+  float randomValue = ((float) random(min*1000, max*1000))/1000.0;
+  if(slot == 0){
+    motor1Setpoint = randomValue;
+  }else{
+    motor2Setpoint = randomValue;
+  }
 }
