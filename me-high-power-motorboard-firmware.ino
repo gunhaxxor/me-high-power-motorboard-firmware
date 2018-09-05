@@ -41,6 +41,8 @@
 // #define PULSE_PER_C 8
 // #define MOTOR_BOTH 2
 
+// #define DONT_USE_METER_PER_SECOND_AS_INPUT
+
 //EEPROM CONFIG
 #define EEPROM_DEVID_ADDR 3
 
@@ -68,6 +70,10 @@ double motor1Setpoint, motor1Input, motor1Output;
 double motor2Setpoint, motor2Input, motor2Output;
 boolean motor1Released = false;
 boolean motor2Released = false;
+
+// Motor command variables
+float motor1TargetSpeed = 0;
+float motor2TargetSpeed = 0;
 
 // PWM RANGE CONFIG
 // this is some weird hack to skip setpoint values that won't make the motor move.
@@ -243,6 +249,8 @@ void ParseI2cCmd(char *c)
     // move(slot, (uint8_t)val.floatVal[0], val.longVal[1], val.floatVal[2]);
     break;
   case CMD_MOVE_SPD:
+    //TODO: Comment what kind of value we expect here!!! Now it's a little bit unclear with the values throughout the pipeline!
+    //Parameter order is slot, lock_state, speed
     move_speed(slot, (uint8_t)val.floatVal[0], val.floatVal[1]);
     break;
   case CMD_SET_SPEED_PID:
@@ -884,12 +892,9 @@ void setMotor2Pwm(int16_t setpoint)
 void move_speed(uint8_t slot, uint8_t state, float speed)
 {
   // TODO Maybe need to add a constrain to make sure speed is within bounds?
-  // TODO: Change the scaling to actually reflect how setpoint correlates to setpoint speed.
-  // So that we at as many phases along the way think about the speed in terms of setpoint (0-255)
-
   if(slot == 0)
   {
-    motor1Setpoint = speed;
+    motor1TargetSpeed = speed;
     if(state == LOCK_STATE)
     {
       motor1Released = false;
@@ -901,7 +906,7 @@ void move_speed(uint8_t slot, uint8_t state, float speed)
   }
   if(slot == 1)
   {
-    motor2Setpoint = speed;
+    motor2TargetSpeed = speed;
     if(state == LOCK_STATE)
     {
       motor2Released = false;
@@ -970,7 +975,7 @@ struct encoderData {
   int deltaPositionsIndex = 0;
   int deltaPositionSum = 0;
   float deltaSpeed = 0;
-  float ticksPerMs = 0;
+  float ticksPerMillis = 0;
   float RPM = 0;
   float metersPerSecond = 0;
 };
@@ -1036,8 +1041,8 @@ void updateEncoders(unsigned long now){
         enc[i].deltaPositionsIndex %= ENCODERVALUESARRAYLENGTH;
       }
 
-      enc[i].ticksPerMs = (float) enc[i].deltaPositionSum / (float) encoderWrapDuration;
-      enc[i].RPM = enc[i].ticksPerMs * 1000.0 * 60.0 / ENCODER_PULSES_PER_ROTATION;
+      enc[i].ticksPerMillis = (float) enc[i].deltaPositionSum / (float) encoderWrapDuration;
+      enc[i].RPM = enc[i].ticksPerMillis * 1000.0 * 60.0 / ENCODER_PULSES_PER_ROTATION;
       enc[i].metersPerSecond = (enc[i].RPM / 60.0) * (WHEELCIRCUMFERENCEMM / 1000.0);
 
       // Serial.print(enc[i].metersPerSecond);
@@ -1081,6 +1086,7 @@ void setup()
   motor1Setpoint = 0;
   motor2Setpoint = 0;
   motor1PID.SetMode(AUTOMATIC);
+  //This is pretty weird. But we have a precalculation inside the PID that offsets values that wouldn't make the motor move.
   motor1PID.SetOutputLimits(-250 + PWM_MOTION_THRESHOLD, 250 - PWM_MOTION_THRESHOLD);
   
   motor2PID.SetMode(AUTOMATIC);
@@ -1113,8 +1119,10 @@ void loop()
   // motor2Setpoint = 0.6;
   // if(now - randomSetpointStamp > 2000){
   //   randomSetpointStamp = now;
-  //   pickRandomSetpoint(1, -2, 2);
+  //   pickRandomSetpoint(1, -2.0f, 2.0f);
   // }
+
+  
 
   if (now - pidUpdateStamp > pidUpdateInterval)
   {
@@ -1123,6 +1131,14 @@ void loop()
     //This might not work if the if statement is called to rarely. In that case the main loop will outrun the timing check.
     //The interval will then run each time the if-statement is called.
     pidUpdateStamp += pidUpdateInterval;
+
+  #ifdef DONT_USE_METER_PER_SECOND_AS_INPUT
+    motor1Setpoint = pwmValueToMpS(motor1TargetSpeed);
+    motor2Setpoint = pwmValueToMpS(motor2TargetSpeed);
+  #else
+    motor1Setpoint = motor1TargetSpeed;
+    motor2Setpoint = motor2TargetSpeed;
+  #endif
 
     motor1Input = enc[0].metersPerSecond;
     motor2Input = enc[1].metersPerSecond;
@@ -1140,9 +1156,10 @@ void loop()
     Serial.print(", ");
     Serial.print(motor2Input);
     Serial.print(", ");
-    Serial.print(motor2Output/10.0);
-    Serial.print(", ");
-    Serial.print(motor2PwmValue);
+    // Serial.print(motor2Output);
+    // Serial.print(", ");
+    // Serial.print(motor2PwmValue);
+    
     Serial.println(",");
   }
   //Serial.println(loopTime);
@@ -1159,31 +1176,36 @@ void loop()
   // Serial.print(motor1Output);
   // Serial.println();
 
-  //Serial.println(String(motor1Setpoint) + "," + String(motor1Input) + "," + String(motor1Output));
+  // Serial.println(String(motor1Setpoint) + "," + String(motor1Input) + "," + String(motor1Output));
 
   //Serial.println(String(motor1Setpoint) + "," + String(motor1Input));
   //Serial.println(String((millis()/100)%60) + ", " + String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
-  //Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output/10.0));
+  // Serial.println(String(motor2Setpoint) + ", " + String(motor2Input) + ", " + String(motor2Output));
 }
 
-int16_t rescalePwmValue(float setpoint){
-  if(abs(setpoint) < PWM_NO_MOTION_THRESHOLD)
-    setpoint = 0;
+int16_t rescalePwmValue(float pwmValue){
+  if(abs(pwmValue) < PWM_NO_MOTION_THRESHOLD)
+    pwmValue = 0;
   else{
-    if(setpoint > 0){
-      setpoint += PWM_MOTION_THRESHOLD;
+    if(pwmValue > 0){
+      pwmValue += PWM_MOTION_THRESHOLD;
     }else{
-      setpoint -= PWM_MOTION_THRESHOLD;
+      pwmValue -= PWM_MOTION_THRESHOLD;
     }
   }
-  return setpoint;
+  return pwmValue;
+}
+
+float pwmValueToMpS(int16_t pwmValue){
+  // TODO: double check if map function can handle floats!!!!
+  return map(pwmValue, -250, 250, -1.8f, 1.8f); 
 }
 
 void pickRandomSetpoint(int slot, float min, float max){
   float randomValue = ((float) random(min*1000, max*1000))/1000.0;
   if(slot == 0){
-    motor1Setpoint = randomValue;
+    motor1TargetSpeed = randomValue;
   }else{
-    motor2Setpoint = randomValue;
+    motor2TargetSpeed = randomValue;
   }
 }
