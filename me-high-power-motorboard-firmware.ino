@@ -1120,7 +1120,11 @@ void loop()
   // motor2Setpoint = 0.6;
   // if(now - randomSetpointStamp > 2000){
   //   randomSetpointStamp = now;
-  //   pickRandomSetpoint(1, -2.0f, 2.0f);
+  // #ifdef DONT_USE_METER_PER_SECOND_AS_INPUT
+  //   pickRandomTargetSpeed(1, -250.0f, 250.0f);
+  // #else
+  //   pickRandomTargetSpeed(1, -2.0f, 2.0f);
+  // #endif
   // }
 
   
@@ -1199,10 +1203,11 @@ int16_t rescalePwmValue(float pwmValue){
 
 float pwmValueToMpS(int16_t pwmValue){
   // TODO: double check if map function can handle floats!!!!
-  return map(pwmValue, -250, 250, -1.8f, 1.8f); 
+  float rescaledValue = map(pwmValue, -250, 250, -1800, 1800); 
+  return rescaledValue/1000.0f;
 }
 
-void pickRandomSetpoint(int slot, float min, float max){
+void pickRandomTargetSpeed(int slot, float min, float max){
   float randomValue = ((float) random(min*1000, max*1000))/1000.0;
   if(slot == 0){
     motor1TargetSpeed = randomValue;
