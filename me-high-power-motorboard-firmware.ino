@@ -250,8 +250,10 @@ void ParseI2cCmd(char *c)
     // move(slot, (uint8_t)val.floatVal[0], val.longVal[1], val.floatVal[2]);
     break;
   case CMD_MOVE_SPD:
-    //TODO: Comment what kind of value we expect here!!! Now it's a little bit unclear with the values throughout the pipeline!
-    //Parameter order is slot, lock_state, speed
+    // By default we expect m/s as unit here.
+    // But it's possible to uncomment the macro DONT_USE_METERS_PER_SECOND in order
+    // to use values between -250 and 250
+    // Parameter order is slot, lock_state, speed
     move_speed(slot, (uint8_t)val.floatVal[0], val.floatVal[1]);
     break;
   case CMD_SET_SPEED_PID:
@@ -1117,12 +1119,13 @@ void loop()
 
   updateEncoders(now);
 
-  // motor2Setpoint = 0.6;
   // if(now - randomSetpointStamp > 2000){
   //   randomSetpointStamp = now;
   // #ifdef DONT_USE_METER_PER_SECOND_AS_INPUT
+  //   pickRandomTargetSpeed(0, -250.0f, 250.0f);
   //   pickRandomTargetSpeed(1, -250.0f, 250.0f);
   // #else
+  //   pickRandomTargetSpeed(0, -2.0f, 2.0f);
   //   pickRandomTargetSpeed(1, -2.0f, 2.0f);
   // #endif
   // }
